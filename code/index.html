@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="de">
+  <head>
+    <meta charset="utf-8" />
+    <title>Buzzer Reaction XR</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- A-Frame -->
+    <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
+    <!-- Optionale Hilfskomponenten -->
+    <script src="https://unpkg.com/aframe-event-set-component@5.0.0/dist/aframe-event-set-component.min.js"></script>
+  </head>
+  <body>
+    <a-scene
+      xr-mode-ui="enabled: true"
+      renderer="antialias: true"
+      background="color: #101018"
+    >
+      <!-- Licht -->
+      <a-entity light="type: ambient; intensity: 0.5"></a-entity>
+      <a-entity
+        light="type: directional; intensity: 0.8"
+        position="0 3 -2"
+      ></a-entity>
+
+      <!-- Boden / Umgebung -->
+      <a-plane
+        rotation="-90 0 0"
+        width="10"
+        height="10"
+        color="#272727"
+      ></a-plane>
+
+      <!-- Arcade-Automat -->
+      <a-entity id="arcade" position="0 0 -2">
+        <a-box width="1.4" height="1.8" depth="0.7" color="#333333"></a-box>
+
+        <!-- Bildschirm -->
+        <a-text
+          id="screenText"
+          position="0 0.9 0.35"
+          align="center"
+          color="#00ff88"
+          wrap-count="18"
+          scale="0.35 0.35 0.35"
+          value="BUZZER REACTION XR&#10;Drücke START"
+        >
+        </a-text>
+
+        <!-- Start-Button -->
+        <a-cylinder
+          id="startButton"
+          class="clickable"
+          position="-0.4 0.2 0.4"
+          radius="0.14"
+          height="0.1"
+          color="#ff3333"
+          event-set__enter="_event: mouseenter; color: #ff6666"
+          event-set__leave="_event: mouseleave; color: #ff3333"
+        >
+        </a-cylinder>
+        <a-text
+          value="START"
+          align="center"
+          position="-0.4 0.05 0.41"
+          scale="0.4 0.4 0.4"
+        ></a-text>
+
+        <!-- Schwierigkeits-Button -->
+        <a-cylinder
+          id="difficultyButton"
+          class="clickable"
+          position="0 0.2 0.4"
+          radius="0.14"
+          height="0.1"
+          color="#3366ff"
+          event-set__enter="_event: mouseenter; color: #6690ff"
+          event-set__leave="_event: mouseleave; color: #3366ff"
+        >
+        </a-cylinder>
+        <a-text
+          id="difficultyLabel"
+          value="NORMAL"
+          align="center"
+          position="0 0.05 0.41"
+          scale="0.35 0.35 0.35"
+        ></a-text>
+
+        <!-- Reset Highscore -->
+        <a-cylinder
+          id="resetHighscore"
+          class="clickable"
+          position="0.4 0.2 0.4"
+          radius="0.14"
+          height="0.1"
+          color="#ffaa00"
+          event-set__enter="_event: mouseenter; color: #ffcc55"
+          event-set__leave="_event: mouseleave; color: #ffaa00"
+        >
+        </a-cylinder>
+        <a-text
+          value="RESET"
+          align="center"
+          position="0.4 0.05 0.41"
+          scale="0.35 0.35 0.35"
+        ></a-text>
+      </a-entity>
+
+      <!-- HUD -->
+      <a-entity id="hud" position="0 1.6 -1.8">
+        <a-text
+          id="timerText"
+          value="Zeit: 0.0"
+          align="left"
+          position="-0.9 0.25 0"
+          color="#ffffff"
+          scale="0.5 0.5 0.5"
+        ></a-text>
+        <a-text
+          id="scoreText"
+          value="Score: 0"
+          align="center"
+          position="0 0.25 0"
+          color="#ffff00"
+          scale="0.5 0.5 0.5"
+        ></a-text>
+        <a-text
+          id="highscoreText"
+          value="Highscore: 0"
+          align="right"
+          position="0.9 0.25 0"
+          color="#00ff88"
+          scale="0.5 0.5 0.5"
+        ></a-text>
+
+        <a-text
+          id="reactionText"
+          value="Reaktion: -- ms"
+          position="0 0 0"
+          align="center"
+          color="#00ff00"
+          scale="0.5 0.5 0.5"
+        ></a-text>
+      </a-entity>
+
+      <!-- Container für Buzzer -->
+      <a-entity id="buzzerContainer"></a-entity>
+
+      <!-- Sounds (Beispiel: einfache kurze Blips als Data-URI oder eigene Dateien) -->
+      <a-sound
+        id="sndStart"
+        src="#dummy"
+        autoplay="false"
+        volume="0.7"
+      ></a-sound>
+      <a-sound
+        id="sndSpawn"
+        src="#dummy"
+        autoplay="false"
+        volume="0.5"
+      ></a-sound>
+      <a-sound id="sndHit" src="#dummy" autoplay="false" volume="0.8"></a-sound>
+      <a-sound
+        id="sndMiss"
+        src="#dummy"
+        autoplay="false"
+        volume="0.5"
+      ></a-sound>
+
+      <!-- Maus-/Gaze-Cursor -->
+      <a-entity camera look-controls wasd-controls>
+        <a-entity
+          cursor="fuse: false; rayOrigin: mouse"
+          raycaster="objects: .clickable, .buzzer"
+          position="0 0 -1"
+          geometry="primitive: ring; radiusInner: 0.015; radiusOuter: 0.025"
+          material="color: #ffffff; shader: flat"
+        >
+        </a-entity>
+      </a-entity>
+    </a-scene>
+
+    <script>
+      (() => {
+        const GAME_DURATION = 30; // Sekunden
+        const difficulties = [
+          {
+            name: "EASY",
+            spawnDelayMin: 0.8,
+            spawnDelayMax: 1.6,
+            buzzerLifetime: 1.4,
+          },
+          {
+            name: "NORMAL",
+            spawnDelayMin: 0.6,
+            spawnDelayMax: 1.2,
+            buzzerLifetime: 1.0,
+          },
+          {
+            name: "HARD",
+            spawnDelayMin: 0.4,
+            spawnDelayMax: 1.0,
+            buzzerLifetime: 0.7,
+          },
+        ];
+
+        let difficultyIndex = 1;
+        let gameRunning = false;
+        let timeLeft = GAME_DURATION;
+        let score = 0;
+        let highscore = 0;
+        let bestReaction = null;
+
+        let nextSpawnTime = 0;
+        let currentBuzzer = null;
+        let buzzerSpawnTime = 0;
+        let buzzerTimeoutId = null;
+
+        const buzzerContainer = document.getElementById("buzzerContainer");
+        const timerText = document.getElementById("timerText");
+        const scoreText = document.getElementById("scoreText");
+        const highscoreText = document.getElementById("highscoreText");
+        const reactionText = document.getElementById("reactionText");
+        const screenText = document.getElementById("screenText");
+        const difficultyLabel = document.getElementById("difficultyLabel");
+
+        const startButton = document.getElementById("startButton");
+        const difficultyButton = document.getElementById("difficultyButton");
+        const resetHighscoreButton = document.getElementById("resetHighscore");
+
+        // Highscore aus localStorage
+        if (window.localStorage) {
+          const saved = localStorage.getItem("buzzerXRHighscore");
+          if (saved) {
+            highscore = parseInt(saved, 10) || 0;
+            highscoreText.setAttribute("value", "Highscore: " + highscore);
+          }
+        }
+
+        function formatTime(t) {
+          return "Zeit: " + t.toFixed(1);
+        }
+
+        function setDifficulty(index) {
+          difficultyIndex = index;
+          difficultyLabel.setAttribute(
+            "value",
+            difficulties[difficultyIndex].name
+          );
+        }
+
+        function cycleDifficulty() {
+          if (gameRunning) return;
+          difficultyIndex = (difficultyIndex + 1) % difficulties.length;
+          setDifficulty(difficultyIndex);
+        }
+
+        function resetHighscore() {
+          if (window.localStorage) {
+            localStorage.removeItem("buzzerXRHighscore");
+          }
+          highscore = 0;
+          highscoreText.setAttribute("value", "Highscore: 0");
+        }
+
+        function updateHUD() {
+          timerText.setAttribute("value", formatTime(timeLeft));
+          scoreText.setAttribute("value", "Score: " + Math.round(score));
+          highscoreText.setAttribute("value", "Highscore: " + highscore);
+          if (bestReaction == null) {
+            reactionText.setAttribute("value", "Reaktion: -- ms");
+          } else {
+            reactionText.setAttribute(
+              "value",
+              "Reaktion: " + Math.round(bestReaction) + " ms"
+            );
+          }
+        }
+
+        function removeCurrentBuzzer(missed = false) {
+          if (!currentBuzzer) return;
+          if (buzzerTimeoutId) {
+            clearTimeout(buzzerTimeoutId);
+            buzzerTimeoutId = null;
+          }
+          if (missed) {
+            // kurzer Miss-Effekt
+            currentBuzzer.setAttribute("material", "color: #ff8800");
+            setTimeout(() => {
+              if (currentBuzzer && currentBuzzer.parentNode) {
+                currentBuzzer.parentNode.removeChild(currentBuzzer);
+              }
+              currentBuzzer = null;
+            }, 150);
+          } else {
+            if (currentBuzzer.parentNode) {
+              currentBuzzer.parentNode.removeChild(currentBuzzer);
+            }
+            currentBuzzer = null;
+          }
+        }
+
+        function spawnBuzzer() {
+          if (!gameRunning || currentBuzzer) return;
+
+          const diff = difficulties[difficultyIndex];
+          const angle = Math.random() * Math.PI * 2;
+          const dist = 1.4 + Math.random() * 0.7;
+          const x = Math.cos(angle) * dist;
+          const z = -2 + Math.sin(angle) * dist * 0.6;
+          const y = 0.3 + Math.random() * 1.0;
+
+          const buzzer = document.createElement("a-entity");
+          buzzer.setAttribute("class", "buzzer clickable");
+          buzzer.setAttribute("position", x + " " + y + " " + z);
+          buzzer.setAttribute(
+            "geometry",
+            "primitive: cylinder; radius: 0.18; height: 0.12"
+          );
+          buzzer.setAttribute("material", "color: #ff0000; shader: flat");
+          buzzer.setAttribute(
+            "animation__float",
+            "property: position; dir: alternate; dur: 500; easing: easeInOutSine; loop: true; to: " +
+              x +
+              " " +
+              (y + 0.08) +
+              " " +
+              z
+          );
+          buzzer.setAttribute(
+            "animation__spin",
+            "property: rotation; dur: 1000; easing: linear; loop: true; to: 0 360 0"
+          );
+
+          buzzer.addEventListener("click", () => {
+            if (!gameRunning || buzzer !== currentBuzzer) return;
+            const rt = performance.now() - buzzerSpawnTime;
+            score += Math.max(10, 1500 - rt);
+            bestReaction =
+              bestReaction == null ? rt : Math.min(bestReaction, rt);
+            buzzer.setAttribute("material", "color: #00ff00");
+            buzzer.setAttribute(
+              "animation__hit",
+              "property: scale; from: 1 1 1; to: 1.4 1.4 1.4; dur: 180"
+            );
+            setTimeout(() => removeCurrentBuzzer(false), 180);
+            updateHUD();
+            scheduleNextSpawn();
+          });
+
+          buzzerContainer.appendChild(buzzer);
+          currentBuzzer = buzzer;
+          buzzerSpawnTime = performance.now();
+
+          // Timeout für „nicht getroffen“
+          buzzerTimeoutId = setTimeout(() => {
+            if (!gameRunning || !currentBuzzer || currentBuzzer !== buzzer)
+              return;
+            removeCurrentBuzzer(true);
+            scheduleNextSpawn();
+          }, diff.buzzerLifetime * 1000);
+        }
+
+        function scheduleNextSpawn() {
+          const diff = difficulties[difficultyIndex];
+          const delay =
+            diff.spawnDelayMin +
+            Math.random() * (diff.spawnDelayMax - diff.spawnDelayMin);
+          nextSpawnTime = performance.now() + delay * 1000;
+        }
+
+        function startGame() {
+          if (gameRunning) return;
+          gameRunning = true;
+          timeLeft = GAME_DURATION;
+          score = 0;
+          bestReaction = null;
+          screenText.setAttribute(
+            "value",
+            "GO!\nMode: " +
+              difficulties[difficultyIndex].name +
+              "\nTreffe so viele Buzzer wie möglich!"
+          );
+          updateHUD();
+          scheduleNextSpawn();
+        }
+
+        function endGame() {
+          gameRunning = false;
+          removeCurrentBuzzer(false);
+          if (score > highscore) {
+            highscore = Math.round(score);
+            if (window.localStorage) {
+              localStorage.setItem("buzzerXRHighscore", highscore);
+            }
+          }
+          updateHUD();
+          screenText.setAttribute(
+            "value",
+            "GAME OVER\nScore: " +
+              Math.round(score) +
+              "\nBest Reaktion: " +
+              (bestReaction == null ? "--" : Math.round(bestReaction) + " ms") +
+              "\nHighscore: " +
+              highscore +
+              "\nDrücke START für neue Runde"
+          );
+        }
+
+        // Hauptloop
+        function tick() {
+          const now = performance.now();
+
+          if (gameRunning) {
+            const dt = 1 / 60;
+            timeLeft -= dt;
+            if (timeLeft <= 0) {
+              timeLeft = 0;
+              endGame();
+            }
+            updateHUD();
+
+            if (!currentBuzzer && now >= nextSpawnTime) {
+              spawnBuzzer();
+            }
+          }
+
+          requestAnimationFrame(tick);
+        }
+
+        // Button-Events
+        startButton.addEventListener("click", () => startGame());
+        difficultyButton.addEventListener("click", () => cycleDifficulty());
+        resetHighscoreButton.addEventListener("click", () => resetHighscore());
+
+        // Initial
+        setDifficulty(difficultyIndex);
+        updateHUD();
+        tick();
+      })();
+    </script>
+  </body>
+</html>
