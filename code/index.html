@@ -34,7 +34,7 @@
           color="#000000"
           wrap-count="18"
           scale="0.35 0.35 0.35"
-          value="BUZZER REACTION XR&#10;Druecke START"
+          value="BUZZER REACTION XR&#10; Dr&uuml;cke START"
         >
         </a-text>
 
@@ -54,6 +54,7 @@
         >
         </a-cylinder>
         <a-text
+          id="startLabel"
           color="#000000"
           value="START"
           align="center"
@@ -95,6 +96,7 @@
         >
         </a-cylinder>
         <a-text
+          id="resetLabel"
           value="RESET"
           align="center"
           position="0.4 0.05 0.41"
@@ -261,7 +263,21 @@
         }
 
         function updateHUD() {
-          
+          //Macht alles unsichtbar wenn das spiel läuft 
+          screenText.setAttribute("visible", !gameRunning);
+          highscoreText.setAttribute("visible", !gameRunning);
+          highscoreText.setAttribute("visible", !(highscore == 0));
+          reactionText.setAttribute("visible", !(reactionText == "Reaktion: -- ms"));
+
+
+          reactionText.setAttribute("visible", !gameRunning);
+          startButton.setAttribute("visible", !gameRunning);
+          startLabel.setAttribute("visible", !gameRunning);
+          resetHighscoreButton.setAttribute("visible", !gameRunning);
+          resetLabel.setAttribute("visible", !gameRunning);
+          difficultyButton.setAttribute("visible", !gameRunning);
+          difficultyLabel.setAttribute("visible", !gameRunning);    
+
           timerText.setAttribute("value", formatTime(timeLeft));
           scoreText.setAttribute("value", "Score: " + Math.round(score));
           highscoreText.setAttribute("value", "Highscore: " + highscore);
@@ -331,9 +347,7 @@
           );
 
           buzzer.addEventListener("click", () => {
-            if (!gameRunning || buzzer !== currentBuzzer) return;
-
-            
+            if (!gameRunning || buzzer !== currentBuzzer) return;            
             const rt = performance.now() - buzzerSpawnTime;
             score += Math.max(10, 1500 - rt);
             bestReaction =
@@ -371,16 +385,12 @@
 
         function startGame() {
           if (gameRunning) return;
+
           gameRunning = true;
+
           timeLeft = GAME_DURATION;
           score = 0;
           bestReaction = null;
-          screenText.setAttribute(
-            "value",
-            "GO!\nMode: " +
-              difficulties[difficultyIndex].name +
-              "\nTreffe so viele Buzzer wie möglich!"
-          );
           updateHUD();
           scheduleNextSpawn();
         }
@@ -412,6 +422,9 @@
           const now = performance.now();
 
           if (gameRunning) {
+            document.getElementById("scoreText").style.visibility = 'hidden';
+            
+
             const dt = 1 / 60;
             timeLeft -= dt;
             if (timeLeft <= 0) {
@@ -423,7 +436,10 @@
             if (!currentBuzzer && now >= nextSpawnTime) {
               spawnBuzzer();
             }
+
           }
+
+
 
           requestAnimationFrame(tick);
         }
