@@ -22,10 +22,15 @@
         position="0 3 -2"
       ></a-entity>
 
+
+      <a-assets>
+        <a-asset-item id="automat" src="./assets/Automat.gltf"></a-asset-item>
+      </a-assets>
+
       
       <!-- Arcade-Automat -->
+      <a-entity gltf-model="#automat"></a-entity>
       <a-entity id="arcade" position="0 0 -2">
-
         <!-- Bildschirm -->
         <a-text
           id="screenText"
