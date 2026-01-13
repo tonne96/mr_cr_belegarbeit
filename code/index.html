@@ -25,34 +25,26 @@
 
       <a-assets>
         <a-asset-item id="automat" src="./assets/Automat.gltf"></a-asset-item>
+        <audio id="audioStart" src="./assets/start.mp3" preload="auto"></audio>
       </a-assets>
 
       
       <!-- Arcade-Automat -->
-      <a-entity gltf-model="#automat" scale="0.5 0.5 0.5" position="-0.4 -1.35 -1.3" rotation="0 270 0"></a-entity>
+      <a-entity gltf-model="#automat" scale="1 1 1" position="-0.4 -1.35 -1" rotation="0 270 0"></a-entity>
       <a-entity id="arcade" position="0 0 -2">
-        <!-- Bildschirm-Hintergrund -->
-        <a-plane
-          id="screenBackground"
-          position="0 0.9 0.35"
-          rotation="0 0 0"
-          width="1.2"
-          height="0.8"
-          color="#1a1a1a"
-          material="side: front"
-        ></a-plane>
+        
 
         <!-- Bildschirm Container (alles Spiel läuft hier) -->
-        <a-entity id="screenContainer" position="0 0.9 0.36">
+        <a-entity id="screenContainer" scale="1.75 1.75 1.75" position="0.35 2.5 0.36" rotation="-25 0 0">
           <!-- Bildschirm Text -->
           <a-text
             id="screenText"
-            position="0 0.3 0"
+            position="0 0.5 0"
             align="center"
             color="#ffffff"
             wrap-count="20"
-            scale="0.25 0.25 0.25"
-            value="BUZZER REACTION XR&#10; Drücke START"
+            scale="0.15 0.15 0.15"
+            value="BUZZER REACTION XR&#10; PRESS START"
           >
             </a-text>
 
@@ -60,7 +52,8 @@
           <a-cylinder
             id="startButton"
             class="clickable"
-            position="-0.3 -0.1 0.01"
+            position="-0.3 -0.3 0.07"
+            rotation="30 0 0"
             radius="0.08"
             height="0.06"
             color="#ff3333"
@@ -73,7 +66,7 @@
             color="#ffffff"
             value="START"
             align="center"
-            position="-0.3 -0.1 0.02"
+            position="-0.3 -0.2 0.02"
             scale="0.2 0.2 0.2"
           ></a-text>
 
@@ -81,7 +74,8 @@
           <a-cylinder
             id="difficultyButton"
             class="clickable"
-            position="0 -0.1 0.01"
+            position="0 -0.3 0.07"
+            rotation="30 0 0"
             radius="0.08"
             height="0.06"
             color="#3366ff"
@@ -94,7 +88,7 @@
             value="NORMAL"
             align="center"
             color="#ffffff"
-            position="0 -0.1 0.02"
+            position="0 -0.2 0.02"
             scale="0.18 0.18 0.18"
           ></a-text>
 
@@ -102,7 +96,8 @@
           <a-cylinder
             id="resetHighscore"
             class="clickable"
-            position="0.3 -0.1 0.01"
+            position="0.3 -0.3 0.07"
+            rotation="30 0 0"
             radius="0.08"
             height="0.06"
             color="#ffaa00"
@@ -114,7 +109,7 @@
             id="resetLabel"
             value="RESET"
             align="center"
-            position="0.3 -0.1 0.02"
+            position="0.3 -0.2 0.02"
             scale="0.18 0.18 0.18"
             color="#ffffff"
           ></a-text>
@@ -124,7 +119,7 @@
             id="timerText"
             value="Zeit: 0.0"
             align="center"
-            position="0 0.35 0"
+            position="0 0.53 0"
             color="#00ff00"
             scale="0.2 0.2 0.2"
           ></a-text>
@@ -132,7 +127,7 @@
             id="scoreText"
             value="Score: 0"
             align="center"
-            position="0 0.25 0"
+            position="0 0.45 0"
             color="#ffffff"
             scale="0.2 0.2 0.2"
           ></a-text>
@@ -157,10 +152,10 @@
           <a-entity id="buzzerContainer"></a-entity>
         </a-entity>
 
-      <!-- Sounds (Beispiel: einfache kurze Blips als Data-URI oder eigene Dateien) -->
+      <!-- Sounds-->
       <a-sound
         id="sndStart"
-        src="#dummy"
+        src="#audioStart"
         autoplay="false"
         volume="0.7"
       ></a-sound>
@@ -179,7 +174,7 @@
       ></a-sound>
 
       <!-- Maus-/Gaze-Cursor -->
-      <a-entity camera look-controls wasd-controls position="0 0 2">
+      <a-entity camera look-controls wasd-controls position="0.3 3 4">
         <a-entity
           cursor="fuse: false; rayOrigin: mouse"
           raycaster="objects: .clickable, .buzzer"
@@ -234,6 +229,8 @@
         const reactionText = document.getElementById("reactionText");
         const screenText = document.getElementById("screenText");
         const difficultyLabel = document.getElementById("difficultyLabel");
+        const startLabel = document.getElementById("startLabel");
+        const resetLabel = document.getElementById("resetLabel");
 
         const startButton = document.getElementById("startButton");
         const difficultyButton = document.getElementById("difficultyButton");
@@ -278,10 +275,6 @@
           //Macht alles unsichtbar wenn das spiel läuft 
           screenText.setAttribute("visible", !gameRunning);
           highscoreText.setAttribute("visible", !gameRunning);
-          highscoreText.setAttribute("visible", !(highscore == 0));
-          reactionText.setAttribute("visible", !(reactionText == "Reaktion: -- ms"));
-
-
           reactionText.setAttribute("visible", !gameRunning);
           startButton.setAttribute("visible", !gameRunning);
           startLabel.setAttribute("visible", !gameRunning);
@@ -289,6 +282,10 @@
           resetLabel.setAttribute("visible", !gameRunning);
           difficultyButton.setAttribute("visible", !gameRunning);
           difficultyLabel.setAttribute("visible", !gameRunning);    
+
+          // Timer und Score nur während des Spiels sichtbar
+          timerText.setAttribute("visible", gameRunning);
+          scoreText.setAttribute("visible", gameRunning);
 
           timerText.setAttribute("value", formatTime(timeLeft));
           scoreText.setAttribute("value", "Score: " + Math.round(score));
@@ -331,19 +328,21 @@
 
           const diff = difficulties[difficultyIndex];
           // Spawn Buzzer nur im Bildschirmbereich (relativ zur screenContainer)
-          const x = (Math.random() - 0.5) * 1.0; // -0.5 bis 0.5
-          const y = (Math.random() - 0.5) * 0.6; // -0.3 bis 0.3
+          const x = (Math.random() - 0.5) * 0.65; // Faktor für Bildschirmbreite
+          const y = (Math.random() - 0.5) * 0.38; // Faktor für Bildschirmhöhe
           const z = 0.01; // Just vor dem Bildschirm
 
           const buzzer = document.createElement("a-entity");
           buzzer.setAttribute("class", "buzzer clickable");
+          buzzer.setAttribute("scale", "0.6 0.6 0.6"); 
           buzzer.setAttribute("position", x + " " + y + " " + z);
+          buzzer.setAttribute("rotation", "90 0 0");
           buzzer.setAttribute(
             "geometry",
             "primitive: cylinder; radius: 0.08; height: 0.08"
           );
           buzzer.setAttribute("material", "color: #ff0000; shader: flat");
-          buzzer.setAttribute(
+          /*buzzer.setAttribute(
             "animation__float",
             "property: position; dir: alternate; dur: 500; easing: easeInOutSine; loop: true; to: " +
               x +
@@ -352,10 +351,11 @@
               " " +
               z
           );
-          buzzer.setAttribute(
+          /*buzzer.setAttribute(
             "animation__spin",
             "property: rotation; dur: 1000; easing: linear; loop: true; to: 0 360 0"
           );
+          */
 
           buzzer.addEventListener("click", () => {
             if (!gameRunning || buzzer !== currentBuzzer) return;            
@@ -402,6 +402,7 @@
           timeLeft = GAME_DURATION;
           score = 0;
           bestReaction = null;
+          document.getElementById("audioStart").play();
           updateHUD();
           scheduleNextSpawn();
         }
