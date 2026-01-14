@@ -9,6 +9,7 @@
     <!-- Optionale Hilfskomponenten -->
     <script src="https://unpkg.com/aframe-event-set-component@5.0.0/dist/aframe-event-set-component.min.js"></script>
   </head>
+
   <body>
     <a-scene
       xr-mode-ui="enabled: true"
@@ -22,20 +23,32 @@
         position="0 3 -2"
       ></a-entity>
 
-
       <a-assets>
         <a-asset-item id="automat" src="./assets/Automat.gltf"></a-asset-item>
-        <audio id="audioStart" src="./assets/start.mp3" preload="auto"></audio>
+        <audio
+          id="audioStart"
+          src="./assets/start.mp3"
+          preload="auto"
+        ></audio>
       </a-assets>
 
-      
       <!-- Arcade-Automat -->
-      <a-entity gltf-model="#automat" scale="1 1 1" position="-0.4 -1.35 -1" rotation="0 270 0"></a-entity>
-      <a-entity id="arcade" position="0 0 -2">
-        
+      <a-entity
+        id="automatModel"
+        gltf-model="#automat"
+        scale="1 1 1"
+        position="-0.4 -1.35 -1"
+        rotation="0 270 0"
+      ></a-entity>
 
+      <a-entity id="arcade" position="0 0 -2">
         <!-- Bildschirm Container (alles Spiel läuft hier) -->
-        <a-entity id="screenContainer" scale="1.75 1.75 1.75" position="0.35 2.5 0.36" rotation="-25 0 0">
+        <a-entity
+          id="screenContainer"
+          scale="1.75 1.75 1.75"
+          position="0.35 2.5 0.36"
+          rotation="-25 0 0"
+        >
           <!-- Bildschirm Text -->
           <a-text
             id="screenText"
@@ -45,8 +58,7 @@
             wrap-count="20"
             scale="0.15 0.15 0.15"
             value="BUZZER REACTION XR&#10; Druecke START"
-          >
-            </a-text>
+          ></a-text>
 
           <!-- Start-Button -->
           <a-cylinder
@@ -59,8 +71,7 @@
             color="#ff3333"
             event-set__enter="_event: mouseenter; color: #ff6666"
             event-set__leave="_event: mouseleave; color: #ff3333"
-          >
-          </a-cylinder>
+          ></a-cylinder>
           <a-text
             id="startLabel"
             color="#ffffff"
@@ -81,8 +92,7 @@
             color="#3366ff"
             event-set__enter="_event: mouseenter; color: #6690ff"
             event-set__leave="_event: mouseleave; color: #3366ff"
-          >
-          </a-cylinder>
+          ></a-cylinder>
           <a-text
             id="difficultyLabel"
             value="NORMAL"
@@ -103,8 +113,7 @@
             color="#ffaa00"
             event-set__enter="_event: mouseenter; color: #ffcc55"
             event-set__leave="_event: mouseleave; color: #ffaa00"
-          >
-          </a-cylinder>
+          ></a-cylinder>
           <a-text
             id="resetLabel"
             value="RESET"
@@ -151,6 +160,7 @@
           <!-- Container für Buzzer -->
           <a-entity id="buzzerContainer"></a-entity>
         </a-entity>
+      </a-entity>
 
       <!-- Sounds-->
       <a-sound
@@ -160,299 +170,518 @@
         volume="0.7"
       ></a-sound>
 
-      <!-- Maus-/Gaze-Cursor -->
-      <a-entity camera look-controls wasd-controls position="0.3 3 4">
+      <!-- =========================
+           PLAYER RIG (Desktop + VR)
+           ========================= -->
+      <a-entity id="rig" position="0.3 3 4" rotation="0 0 0">
+        <!-- Desktop Kamera + WASD (Cursor-Ring entfernt) -->
         <a-entity
-          cursor="fuse: false; rayOrigin: mouse"
-          raycaster="objects: .clickable, .buzzer"
-          position="0 0 -1"
-          geometry="primitive: ring; radiusInner: 0.015; radiusOuter: 0.025"
-          material="color: #000000; shader: flat"
-        >
-        </a-entity>
+          id="camera"
+          camera
+          look-controls
+          wasd-controls
+          position="0 0 0"
+        ></a-entity>
+
+        <!-- VR Controller (sichtbar nur in VR) -->
+        <a-entity
+          id="leftHand"
+          visible="false"
+          laser-controls="hand: left"
+          raycaster="objects: .clickable, .buzzer; far: 20"
+          line="color: #00ff00"
+          vr-click
+          vr-joystick-locomotion="speed: 2.0; deadzone: 0.18"
+        ></a-entity>
+
+        <a-entity
+          id="rightHand"
+          visible="false"
+          laser-controls="hand: right"
+          raycaster="objects: .clickable, .buzzer; far: 20"
+          line="color: #00ff00"
+          vr-click
+          vr-vertical-move="speed: 1.5; deadzone: 0.18"
+        ></a-entity>
       </a-entity>
-    </a-scene>
 
-    <script>
-      (() => {
-        const GAME_DURATION = 30; // Sekunden
-        const difficulties = [
-          {
-            name: "EASY",
-            spawnDelayMin: 0.8,
-            spawnDelayMax: 1,
-            buzzerLifetime: 1.4,
+      <script>
+        // =========================================================
+        // A-Frame Game Loop (VR-sicher)
+        // =========================================================
+        AFRAME.registerComponent("buzzer-game-loop", {
+          tick: function (time, timeDelta) {
+            if (window.__buzzerTick) window.__buzzerTick(timeDelta / 1000);
           },
-          {
-            name: "NORMAL",
-            spawnDelayMin: 0.6,
-            spawnDelayMax: 0.8,
-            buzzerLifetime: 1.0,
+        });
+
+        // =========================================================
+        // VR Trigger => "click" auf Raycaster-Ziel
+        // =========================================================
+        AFRAME.registerComponent("vr-click", {
+          init: function () {
+            const fire = () => {
+              const ray = this.el.components.raycaster;
+              if (!ray) return;
+              const hits = ray.intersections;
+              if (!hits || hits.length === 0) return;
+
+              const targetEl = hits[0].object && hits[0].object.el;
+              if (targetEl) targetEl.emit("click");
+            };
+
+            this.el.addEventListener("triggerdown", fire);
+            this.el.addEventListener("gripdown", fire);
+            this.el.addEventListener("abuttondown", fire);
+            this.el.addEventListener("xbuttondown", fire);
           },
-          {
-            name: "HARD",
-            spawnDelayMin: 0.4,
-            spawnDelayMax: 0.6,
-            buzzerLifetime: 0.7,
+        });
+
+        // =========================================================
+        // VR Joystick Locomotion
+        // =========================================================
+        AFRAME.registerComponent("vr-joystick-locomotion", {
+          schema: {
+            speed: { type: "number", default: 2.0 },
+            deadzone: { type: "number", default: 0.18 },
           },
-        ];
+          tick: function (time, timeDelta) {
+            const scene = this.el.sceneEl;
+            if (!scene || !scene.is("vr-mode")) return;
 
-        let difficultyIndex = 1;
-        let gameRunning = false;
-        let timeLeft = GAME_DURATION;
-        let score = 0;
-        let highscore = 0;
-        let bestReaction = null;
+            const rig = document.getElementById("rig");
+            const cam = document.getElementById("camera");
+            if (!rig || !cam) return;
 
-        let nextSpawnTime = 0;
-        let currentBuzzer = null;
-        let buzzerSpawnTime = 0;
-        let buzzerTimeoutId = null;
+            const tracked = this.el.components["tracked-controls"];
+            if (!tracked || !tracked.controller) return;
 
-        const buzzerContainer = document.getElementById("buzzerContainer");
-        const timerText = document.getElementById("timerText");
-        const scoreText = document.getElementById("scoreText");
-        const highscoreText = document.getElementById("highscoreText");
-        const reactionText = document.getElementById("reactionText");
-        const screenText = document.getElementById("screenText");
-        const difficultyLabel = document.getElementById("difficultyLabel");
-        const startLabel = document.getElementById("startLabel");
-        const resetLabel = document.getElementById("resetLabel");
+            const gp = tracked.controller.gamepad;
+            if (!gp || !gp.axes) return;
 
-        const startButton = document.getElementById("startButton");
-        const difficultyButton = document.getElementById("difficultyButton");
-        const resetHighscoreButton = document.getElementById("resetHighscore");
+            const axes = gp.axes;
 
-        // Highscore aus localStorage
-        if (window.localStorage) {
-          const saved = localStorage.getItem("buzzerXRHighscore");
-          if (saved) {
-            highscore = parseInt(saved, 10) || 0;
-            highscoreText.setAttribute("value", "Highscore: " + highscore);
-          }
-        }
+            // Häufig: axes[2]/[3] sonst fallback axes[0]/[1]
+            let axX = axes.length >= 4 ? axes[2] : axes[0];
+            let axY = axes.length >= 4 ? axes[3] : axes[1];
 
-        function formatTime(t) {
-          return "Zeit: " + t.toFixed(1);
-        }
-
-        function setDifficulty(index) {
-          difficultyIndex = index;
-          difficultyLabel.setAttribute(
-            "value",
-            difficulties[difficultyIndex].name
-          );
-        }
-
-        function cycleDifficulty() {
-          if (gameRunning) return;
-          difficultyIndex = (difficultyIndex + 1) % difficulties.length;
-          setDifficulty(difficultyIndex);
-        }
-
-        function resetHighscore() {
-          if (window.localStorage) {
-            localStorage.removeItem("buzzerXRHighscore");
-          }
-          highscore = 0;
-          highscoreText.setAttribute("value", "Highscore: 0");
-        }
-
-        function updateHUD() {
-          //Macht alles unsichtbar wenn das spiel läuft 
-          screenText.setAttribute("visible", !gameRunning);
-          highscoreText.setAttribute("visible", !gameRunning);
-          reactionText.setAttribute("visible", !gameRunning);
-          startButton.setAttribute("visible", !gameRunning);
-          startLabel.setAttribute("visible", !gameRunning);
-          resetHighscoreButton.setAttribute("visible", !gameRunning);
-          resetLabel.setAttribute("visible", !gameRunning);
-          difficultyButton.setAttribute("visible", !gameRunning);
-          difficultyLabel.setAttribute("visible", !gameRunning);    
-
-          // Timer und Score nur während des Spiels sichtbar
-          timerText.setAttribute("visible", gameRunning);
-          scoreText.setAttribute("visible", gameRunning);
-
-          timerText.setAttribute("value", formatTime(timeLeft));
-          scoreText.setAttribute("value", "Score: " + Math.round(score));
-          highscoreText.setAttribute("value", "Highscore: " + highscore);
-          if (bestReaction == null) {
-            reactionText.setAttribute("value", "Reaktion: -- ms");
-          } else {
-            reactionText.setAttribute(
-              "value",
-              "Reaktion: " + Math.round(bestReaction) + " ms"
-            );
-          }
-        }
-
-        function removeCurrentBuzzer(missed = false) {
-          if (!currentBuzzer) return;
-          if (buzzerTimeoutId) {
-            clearTimeout(buzzerTimeoutId);
-            buzzerTimeoutId = null;
-          }
-          if (missed) {
-            // kurzer Miss-Effekt
-            currentBuzzer.setAttribute("material", "color: #ff8800");
-            setTimeout(() => {
-              if (currentBuzzer && currentBuzzer.parentNode) {
-                currentBuzzer.parentNode.removeChild(currentBuzzer);
-              }
-              currentBuzzer = null;
-            }, 150);
-          } else {
-            if (currentBuzzer.parentNode) {
-              currentBuzzer.parentNode.removeChild(currentBuzzer);
+            // Fallback wenn [2,3] leer sind
+            if (Math.abs(axX) < 0.001 && Math.abs(axY) < 0.001) {
+              axX = axes[0] ?? 0;
+              axY = axes[1] ?? 0;
             }
-            currentBuzzer = null;
-          }
-        }
 
-        function spawnBuzzer() {
-          if (!gameRunning || currentBuzzer) return;
+            // Deadzone
+            if (Math.abs(axX) < this.data.deadzone) axX = 0;
+            if (Math.abs(axY) < this.data.deadzone) axY = 0;
+            if (axX === 0 && axY === 0) return;
 
-          const diff = difficulties[difficultyIndex];
-          // Spawn Buzzer nur im Bildschirmbereich (relativ zur screenContainer)
-          const x = (Math.random() - 0.5) * 0.65; // Faktor für Bildschirmbreite
-          const y = (Math.random() - 0.5) * 0.38; // Faktor für Bildschirmhöhe
-          const z = 0.01; // Just vor dem Bildschirm
+            const dt = timeDelta / 1000;
 
-          const buzzer = document.createElement("a-entity");
-          buzzer.setAttribute("class", "buzzer clickable");
-          buzzer.setAttribute("scale", "0.6 0.6 0.6"); 
-          buzzer.setAttribute("position", x + " " + y + " " + z);
-          buzzer.setAttribute("rotation", "90 0 0");
-          buzzer.setAttribute(
-            "geometry",
-            "primitive: cylinder; radius: 0.08; height: 0.08"
-          );
-          buzzer.setAttribute("material", "color: #ff0000; shader: flat");
-          /*buzzer.setAttribute(
-            "animation__float",
-            "property: position; dir: alternate; dur: 500; easing: easeInOutSine; loop: true; to: " +
-              x +
-              " " +
-              (y + 0.03) +
-              " " +
-              z
-          );
-          /*buzzer.setAttribute(
-            "animation__spin",
-            "property: rotation; dur: 1000; easing: linear; loop: true; to: 0 360 0"
-          );
-          */
+            // Blickrichtung (Yaw) der Kamera
+            const yaw = (cam.getAttribute("rotation").y * Math.PI) / 180;
 
-          buzzer.addEventListener("click", () => {
-            if (!gameRunning || buzzer !== currentBuzzer) return;            
-            const rt = performance.now() - buzzerSpawnTime;
-            score += Math.max(10, 1500 - rt);
-            bestReaction =
-              bestReaction == null ? rt : Math.min(bestReaction, rt);
-            buzzer.setAttribute("material", "color: #00ff00");
-            buzzer.setAttribute(
-              "animation__hit",
-              "property: scale; from: 1 1 1; to: 1.4 1.4 1.4; dur: 180"
-            );
-            setTimeout(() => removeCurrentBuzzer(false), 180);
-            updateHUD();
-            scheduleNextSpawn();
+            // Vor/Zurück
+            const forward = axY * this.data.speed * dt;
+
+            // Links/Rechts
+            const strafe = axX * this.data.speed * dt;
+
+            const dx = Math.sin(yaw) * forward + Math.cos(yaw) * strafe;
+            const dz = Math.cos(yaw) * forward - Math.sin(yaw) * strafe;
+
+            const pos = rig.getAttribute("position");
+            rig.setAttribute("position", {
+              x: pos.x + dx,
+              y: pos.y,
+              z: pos.z + dz,
+            });
+          },
+        });
+
+        // =========================================================
+        // VR Vertical Movement (rechter Stick hoch/runter)
+        // =========================================================
+        AFRAME.registerComponent("vr-vertical-move", {
+          schema: {
+            speed: { type: "number", default: 1.2 },
+            deadzone: { type: "number", default: 0.18 },
+          },
+          tick: function (time, timeDelta) {
+            const scene = this.el.sceneEl;
+            if (!scene || !scene.is("vr-mode")) return;
+
+            const rig = document.getElementById("rig");
+            if (!rig) return;
+
+            const tracked = this.el.components["tracked-controls"];
+            if (!tracked || !tracked.controller) return;
+
+            const gp = tracked.controller.gamepad;
+            if (!gp || !gp.axes) return;
+
+            const axes = gp.axes;
+
+            // rechter Stick Y: häufig axes[3], fallback axes[1]
+            let vertical = axes.length >= 4 ? axes[3] : axes[1];
+            if (Math.abs(vertical) < this.data.deadzone) return;
+
+            const dt = timeDelta / 1000;
+
+            // Stick hoch -> hoch (falls invertiert: Vorzeichen ändern)
+            const dy = -vertical * this.data.speed * dt;
+
+            const pos = rig.getAttribute("position");
+            rig.setAttribute("position", { x: pos.x, y: pos.y + dy, z: pos.z });
+          },
+        });
+
+        // =========================================================
+        // Helper: Rig so verschieben, dass HMD-Kamera exakt auf Ziel landet
+        // =========================================================
+        function moveRigSoCameraHitsWorldPos(targetWorldPos, targetYawDeg) {
+          const rig = document.getElementById("rig");
+          const cam = document.getElementById("camera");
+          if (!rig || !cam) return;
+
+          const camWorld = new THREE.Vector3();
+          cam.object3D.getWorldPosition(camWorld);
+
+          const delta = targetWorldPos.clone().sub(camWorld);
+
+          const rigPos = rig.getAttribute("position");
+          rig.setAttribute("position", {
+            x: rigPos.x + delta.x,
+            y: rigPos.y + delta.y,
+            z: rigPos.z + delta.z,
           });
 
-          buzzerContainer.appendChild(buzzer);
-          currentBuzzer = buzzer;
-          buzzerSpawnTime = performance.now();
-
-          // Timeout für „nicht getroffen“
-          buzzerTimeoutId = setTimeout(() => {
-            if (!gameRunning || !currentBuzzer || currentBuzzer !== buzzer)
-              return;
-            removeCurrentBuzzer(true);
-            scheduleNextSpawn();
-          }, diff.buzzerLifetime * 1000);
+          rig.setAttribute("rotation", { x: 0, y: targetYawDeg, z: 0 });
         }
 
-        function scheduleNextSpawn() {
-          const diff = difficulties[difficultyIndex];
-          const delay =
-            diff.spawnDelayMin +
-            Math.random() * (diff.spawnDelayMax - diff.spawnDelayMin);
-          nextSpawnTime = performance.now() + delay * 1000;
+        // =========================================================
+        // Spawn vor Automat + Blick auf Automat
+        // =========================================================
+        function spawnInFrontOfAutomat() {
+          const autom = document.getElementById("automatModel");
+          if (!autom) return;
+
+          const automPos = new THREE.Vector3();
+          autom.object3D.getWorldPosition(automPos);
+
+          // Forward-Richtung des Automaten (A-Frame forward = -Z)
+          const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(
+            autom.object3D.quaternion
+          );
+
+          const distance = 1.2;
+          const targetPos = automPos
+            .clone()
+            .add(forward.clone().multiplyScalar(distance));
+
+          const automRot = autom.getAttribute("rotation");
+          const targetYaw = (automRot ? automRot.y : 0) + 180;
+
+          moveRigSoCameraHitsWorldPos(targetPos, targetYaw);
         }
 
-        function startGame() {
-          if (gameRunning) return;
+        // =========================================================
+        // VR Enter/Exit: Controller sichtbar + Spawn nach XR init
+        // + Beim Exit-VR zurück zum "vor dem Automaten" Punkt
+        // =========================================================
+        (function setupVr() {
+          const scene = document.querySelector("a-scene");
+          const left = document.getElementById("leftHand");
+          const right = document.getElementById("rightHand");
+          const rig = document.getElementById("rig");
+          const cam = document.getElementById("camera");
 
-          gameRunning = true;
+          if (!scene || !rig) return;
 
-          timeLeft = GAME_DURATION;
-          score = 0;
-          bestReaction = null;
-          document.getElementById("audioStart").play();
-          updateHUD();
-          scheduleNextSpawn();
-        }
+          // ✅ Hier speichern wir die "VR Startposition vor dem Automaten"
+          let vrStartRigPos = null;
+          let vrStartRigRot = null;
 
-        function endGame() {
-          gameRunning = false;
-          removeCurrentBuzzer(false);
-          if (score > highscore) {
-            highscore = Math.round(score);
-            if (window.localStorage) {
-              localStorage.setItem("buzzerXRHighscore", highscore);
+          // Game loop immer aktiv (funktioniert Desktop + VR)
+          scene.setAttribute("buzzer-game-loop", "");
+
+          scene.addEventListener("enter-vr", () => {
+            left && left.setAttribute("visible", "true");
+            right && right.setAttribute("visible", "true");
+
+            requestAnimationFrame(() => {
+              requestAnimationFrame(() => {
+                // Spawn vor Automat
+                spawnInFrontOfAutomat();
+
+                // ✅ DIREKT DANACH speichern wir die Position/Rotation
+                setTimeout(() => {
+                  vrStartRigPos = { ...rig.getAttribute("position") };
+                  vrStartRigRot = { ...rig.getAttribute("rotation") };
+                }, 0);
+              });
+            });
+          });
+
+          scene.addEventListener("exit-vr", () => {
+            left && left.setAttribute("visible", "false");
+            right && right.setAttribute("visible", "false");
+
+            // ✅ Zurück zum VR-Startpunkt (vor Automat)
+            if (vrStartRigPos && vrStartRigRot) {
+              rig.setAttribute("position", vrStartRigPos);
+              rig.setAttribute("rotation", vrStartRigRot);
+            }
+
+            // Optional: Blick stabilisieren nach VR Exit
+            if (cam && cam.components && cam.components["look-controls"]) {
+              const lc = cam.components["look-controls"];
+              if (typeof lc.resetOrientation === "function")
+                lc.resetOrientation();
+              cam.setAttribute("rotation", "0 0 0");
+            }
+          });
+        })();
+
+        // =========================================================
+        // DEIN GAME CODE (Tick umgebaut auf dt-Input, VR-sicher)
+        // =========================================================
+        (() => {
+          const GAME_DURATION = 30; // Sekunden
+          const difficulties = [
+            {
+              name: "EASY",
+              spawnDelayMin: 0.8,
+              spawnDelayMax: 1,
+              buzzerLifetime: 1.4,
+            },
+            {
+              name: "NORMAL",
+              spawnDelayMin: 0.6,
+              spawnDelayMax: 0.8,
+              buzzerLifetime: 1.0,
+            },
+            {
+              name: "HARD",
+              spawnDelayMin: 0.4,
+              spawnDelayMax: 0.6,
+              buzzerLifetime: 0.7,
+            },
+          ];
+
+          let difficultyIndex = 1;
+          let gameRunning = false;
+          let timeLeft = GAME_DURATION;
+          let score = 0;
+          let highscore = 0;
+          let bestReaction = null;
+
+          let nextSpawnTime = 0;
+          let currentBuzzer = null;
+          let buzzerSpawnTime = 0;
+          let buzzerTimeoutId = null;
+
+          const buzzerContainer = document.getElementById("buzzerContainer");
+          const timerText = document.getElementById("timerText");
+          const scoreText = document.getElementById("scoreText");
+          const highscoreText = document.getElementById("highscoreText");
+          const reactionText = document.getElementById("reactionText");
+          const screenText = document.getElementById("screenText");
+          const difficultyLabel = document.getElementById("difficultyLabel");
+
+          const startButton = document.getElementById("startButton");
+          const difficultyButton = document.getElementById("difficultyButton");
+          const resetHighscoreButton = document.getElementById("resetHighscore");
+
+          if (window.localStorage) {
+            const saved = localStorage.getItem("buzzerXRHighscore");
+            if (saved) {
+              highscore = parseInt(saved, 10) || 0;
+              highscoreText.setAttribute("value", "Highscore: " + highscore);
             }
           }
-          updateHUD();
-          screenText.setAttribute(
-            "value",
-            "GAME OVER\nScore: " +
-              Math.round(score) +
-              "\nBeste Reaktion: " +
-              (bestReaction == null ? "--" : Math.round(bestReaction) + " ms") +
-              "\nHighscore: " +
-              highscore +
-              "\nDruecke START fuer neue Runde"
-          );
-        }
 
-        // Hauptloop
-        function tick() {
-          const now = performance.now();
+          function formatTime(t) {
+            return "Zeit: " + t.toFixed(1);
+          }
 
-          if (gameRunning) {
-            document.getElementById("scoreText").style.visibility = 'hidden';
-            
+          function setDifficulty(index) {
+            difficultyIndex = index;
+            difficultyLabel.setAttribute(
+              "value",
+              difficulties[difficultyIndex].name
+            );
+          }
 
-            const dt = 1 / 60;
-            timeLeft -= dt;
-            if (timeLeft <= 0) {
-              timeLeft = 0;
-              endGame();
+          function cycleDifficulty() {
+            if (gameRunning) return;
+            difficultyIndex = (difficultyIndex + 1) % difficulties.length;
+            setDifficulty(difficultyIndex);
+          }
+
+          function resetHighscore() {
+            if (window.localStorage)
+              localStorage.removeItem("buzzerXRHighscore");
+            highscore = 0;
+            highscoreText.setAttribute("value", "Highscore: 0");
+          }
+
+          function updateHUD() {
+            screenText.setAttribute("visible", !gameRunning);
+            highscoreText.setAttribute("visible", !gameRunning);
+            reactionText.setAttribute("visible", !gameRunning);
+            startButton.setAttribute("visible", !gameRunning);
+            document.getElementById("startLabel").setAttribute("visible", !gameRunning);
+            resetHighscoreButton.setAttribute("visible", !gameRunning);
+            document.getElementById("resetLabel").setAttribute("visible", !gameRunning);
+            difficultyButton.setAttribute("visible", !gameRunning);
+            document.getElementById("difficultyLabel").setAttribute("visible", !gameRunning);
+
+            timerText.setAttribute("visible", gameRunning);
+            scoreText.setAttribute("visible", gameRunning);
+
+            timerText.setAttribute("value", formatTime(timeLeft));
+            scoreText.setAttribute("value", "Score: " + Math.round(score));
+            highscoreText.setAttribute("value", "Highscore: " + highscore);
+
+            if (bestReaction == null) {
+              reactionText.setAttribute("value", "Reaktion: -- ms");
+            } else {
+              reactionText.setAttribute(
+                "value",
+                "Reaktion: " + Math.round(bestReaction) + " ms"
+              );
+            }
+          }
+
+          function removeCurrentBuzzer(missed = false) {
+            if (!currentBuzzer) return;
+            if (buzzerTimeoutId) {
+              clearTimeout(buzzerTimeoutId);
+              buzzerTimeoutId = null;
+            }
+            if (missed) {
+              currentBuzzer.setAttribute("material", "color: #ff8800");
+              setTimeout(() => {
+                if (currentBuzzer && currentBuzzer.parentNode)
+                  currentBuzzer.parentNode.removeChild(currentBuzzer);
+                currentBuzzer = null;
+              }, 150);
+            } else {
+              if (currentBuzzer.parentNode)
+                currentBuzzer.parentNode.removeChild(currentBuzzer);
+              currentBuzzer = null;
+            }
+          }
+
+          function spawnBuzzer() {
+            if (!gameRunning || currentBuzzer) return;
+
+            const diff = difficulties[difficultyIndex];
+            const x = (Math.random() - 0.5) * 0.65;
+            const y = (Math.random() - 0.5) * 0.38;
+            const z = 0.01;
+
+            const buzzer = document.createElement("a-entity");
+            buzzer.setAttribute("class", "buzzer clickable");
+            buzzer.setAttribute("scale", "0.6 0.6 0.6");
+            buzzer.setAttribute("position", x + " " + y + " " + z);
+            buzzer.setAttribute("rotation", "90 0 0");
+            buzzer.setAttribute(
+              "geometry",
+              "primitive: cylinder; radius: 0.08; height: 0.08"
+            );
+            buzzer.setAttribute("material", "color: #ff0000; shader: flat");
+
+            buzzer.addEventListener("click", () => {
+              if (!gameRunning || buzzer !== currentBuzzer) return;
+              const rt = performance.now() - buzzerSpawnTime;
+              score += Math.max(10, 1500 - rt);
+              bestReaction = bestReaction == null ? rt : Math.min(bestReaction, rt);
+              buzzer.setAttribute("material", "color: #00ff00");
+              buzzer.setAttribute(
+                "animation__hit",
+                "property: scale; from: 1 1 1; to: 1.4 1.4 1.4; dur: 180"
+              );
+              setTimeout(() => removeCurrentBuzzer(false), 180);
+              updateHUD();
+              scheduleNextSpawn();
+            });
+
+            buzzerContainer.appendChild(buzzer);
+            currentBuzzer = buzzer;
+            buzzerSpawnTime = performance.now();
+
+            buzzerTimeoutId = setTimeout(() => {
+              if (!gameRunning || !currentBuzzer || currentBuzzer !== buzzer) return;
+              removeCurrentBuzzer(true);
+              scheduleNextSpawn();
+            }, diff.buzzerLifetime * 1000);
+          }
+
+          function scheduleNextSpawn() {
+            const diff = difficulties[difficultyIndex];
+            const delay =
+              diff.spawnDelayMin +
+              Math.random() * (diff.spawnDelayMax - diff.spawnDelayMin);
+            nextSpawnTime = performance.now() + delay * 1000;
+          }
+
+          function startGame() {
+            if (gameRunning) return;
+            gameRunning = true;
+            timeLeft = GAME_DURATION;
+            score = 0;
+            bestReaction = null;
+
+            document.getElementById("audioStart").play();
+            updateHUD();
+            scheduleNextSpawn();
+          }
+
+          function endGame() {
+            gameRunning = false;
+            removeCurrentBuzzer(false);
+            if (score > highscore) {
+              highscore = Math.round(score);
+              if (window.localStorage) localStorage.setItem("buzzerXRHighscore", highscore);
             }
             updateHUD();
-
-            if (!currentBuzzer && now >= nextSpawnTime) {
-              spawnBuzzer();
-            }
-
+            screenText.setAttribute(
+              "value",
+              "GAME OVER\nScore: " +
+                Math.round(score) +
+                "\nBeste Reaktion: " +
+                (bestReaction == null ? "--" : Math.round(bestReaction) + " ms") +
+                "\nHighscore: " +
+                highscore +
+                "\nDruecke START fuer neue Runde"
+            );
           }
 
+          function tick(dt) {
+            const now = performance.now();
+            if (gameRunning) {
+              timeLeft -= dt;
+              if (timeLeft <= 0) {
+                timeLeft = 0;
+                endGame();
+              }
+              updateHUD();
+              if (!currentBuzzer && now >= nextSpawnTime) spawnBuzzer();
+            }
+          }
 
+          window.__buzzerTick = tick;
 
-          requestAnimationFrame(tick);
-        }
+          startButton.addEventListener("click", () => startGame());
+          difficultyButton.addEventListener("click", () => cycleDifficulty());
+          resetHighscoreButton.addEventListener("click", () => resetHighscore());
 
-        // Button-Events
-        startButton.addEventListener("click", () => startGame());
-        difficultyButton.addEventListener("click", () => cycleDifficulty());
-        resetHighscoreButton.addEventListener("click", () => resetHighscore());
-
-        // Initial
-        setDifficulty(difficultyIndex);
-        updateHUD();
-        tick();
-      })();
-    </script>
+          setDifficulty(difficultyIndex);
+          updateHUD();
+        })();
+      </script>
+    </a-scene>
   </body>
 </html>
