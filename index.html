@@ -755,77 +755,52 @@
         })();
 
         // =========================================================
-        // AR Button Handler
+        // XR Button Handler (VR & AR)
         // =========================================================
-        (function setupARButton() {
+        (function setupXRButtons() {
           const arButton = document.getElementById("arButton");
           const scene = document.querySelector("a-scene");
 
           if (!arButton || !scene) return;
 
-          // Prüfe ob AR unterstützt wird
-          if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-            // Versuche AR-Unterstützung zu erkennen
-            if (scene.xrSession || (window.XRSession && navigator.xr)) {
-              arButton.classList.add("available");
-            }
-          }
-
-          // Versuche AR zu starten, wenn Button geklickt wird
-          arButton.addEventListener("click", async () => {
-            try {
-              if (scene.is("ar-mode")) {
-                // AR beenden
-                scene.exitXR();
-              } else {
-                // AR starten
-                const enterXRButton = document.querySelector(
-                  "button[aria-label*='AR']",
-                );
-                if (enterXRButton) {
-                  enterXRButton.click();
-                } else {
-                  // Fallback: Versuche direkt AR zu starten
-                  const options = {
-                    requiredFeatures: ["hit-test", "dom-overlay"],
-                    domOverlay: { root: document.body },
-                  };
-                  if (navigator.xr) {
-                    try {
-                      const session = await navigator.xr.requestSession(
-                        "immersive-ar",
-                        options,
-                      );
-                      scene.xrSession = session;
-                      scene.enterAR();
-                    } catch (e) {
-                      // AR nicht verfügbar, zeige Meldung
-                      alert(
-                        "Augmented Reality wird auf diesem Gerät nicht unterstützt.",
-                      );
-                    }
-                  }
-                }
-              }
-            } catch (error) {
-              console.error("AR Fehler:", error);
-            }
-          });
-
-          // Zeige AR Button wenn Seite geladen ist (nach Prüfung)
+          // Prüfe XR-Unterstützung nach A-Frame Init
           setTimeout(() => {
-            // A-Frame sollte bis hier geladen sein
-            // Prüfe nochmal ob AR Button in der XR-UI existiert
             const xrUI = document.querySelector(".a-xr-ui");
-            if (xrUI) {
-              const arModeButton = Array.from(
-                xrUI.querySelectorAll("button"),
-              ).find((btn) => btn.textContent.includes("AR"));
-              if (arModeButton) {
-                arButton.classList.add("available");
-              }
+            if (!xrUI) {
+              console.log(
+                "XR UI nicht gefunden, XR wahrscheinlich nicht verfügbar",
+              );
+              return;
             }
-          }, 1000);
+
+            // Suche AR Button in A-Frame XR UI
+            const buttons = Array.from(xrUI.querySelectorAll("button"));
+            const arModeButton = buttons.find(
+              (btn) =>
+                btn.textContent.includes("AR") ||
+                btn.getAttribute("aria-label")?.includes("AR"),
+            );
+            const vrModeButton = buttons.find(
+              (btn) =>
+                btn.textContent.includes("VR") ||
+                btn.getAttribute("aria-label")?.includes("VR"),
+            );
+
+            // Zeige custom AR Button nur wenn AR im A-Frame verfügbar ist
+            if (arModeButton) {
+              arButton.classList.add("available");
+              arButton.addEventListener("click", () => {
+                arModeButton.click();
+              });
+            } else if (vrModeButton) {
+              // Auf Quest: Zeige Button für VR (mit Passthrough)
+              arButton.textContent = "📱 MR starten (VR)";
+              arButton.classList.add("available");
+              arButton.addEventListener("click", () => {
+                vrModeButton.click();
+              });
+            }
+          }, 2000);
         })();
       </script>
     </a-scene>
