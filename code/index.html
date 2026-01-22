@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="de">
   <head>
     <meta charset="utf-8" />
@@ -13,7 +13,7 @@
   <body>
     <a-scene
       xr-mode-ui="enabled: true"
-      renderer="antialias: true"
+      renderer="antialias: true; colorManagement: true"
       background="color: #ffffff"
     >
       <!-- Licht -->
@@ -25,11 +25,7 @@
 
       <a-assets>
         <a-asset-item id="automat" src="./assets/Automat.gltf"></a-asset-item>
-        <audio
-          id="audioStart"
-          src="./assets/start.mp3"
-          preload="auto"
-        ></audio>
+        <audio id="audioStart" src="./assets/start.mp3" preload="auto"></audio>
       </a-assets>
 
       <!-- Arcade-Automat -->
@@ -180,6 +176,8 @@
           camera
           look-controls
           wasd-controls
+          raycaster="objects: .clickable, .buzzer; far: 20"
+          cursor="rayOrigin: mouse"
           position="0 0 0"
         ></a-entity>
 
@@ -371,7 +369,7 @@
 
           // Forward-Richtung des Automaten (A-Frame forward = -Z)
           const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(
-            autom.object3D.quaternion
+            autom.object3D.quaternion,
           );
 
           const distance = 1.2;
@@ -386,10 +384,10 @@
         }
 
         // =========================================================
-        // VR Enter/Exit: Controller sichtbar + Spawn nach XR init
-        // + Beim Exit-VR zurück zum "vor dem Automaten" Punkt
+        // VR/AR Enter/Exit: Controller sichtbar + Spawn nach XR init
+        // + Beim Exit zurück zum "vor dem Automaten" Punkt
         // =========================================================
-        (function setupVr() {
+        (function setupXr() {
           const scene = document.querySelector("a-scene");
           const left = document.getElementById("leftHand");
           const right = document.getElementById("rightHand");
@@ -398,14 +396,16 @@
 
           if (!scene || !rig) return;
 
-          // ✅ Hier speichern wir die "VR Startposition vor dem Automaten"
-          let vrStartRigPos = null;
-          let vrStartRigRot = null;
+          // ✅ Hier speichern wir die "Startposition vor dem Automaten"
+          let xrStartRigPos = null;
+          let xrStartRigRot = null;
+          let isARMode = false;
 
-          // Game loop immer aktiv (funktioniert Desktop + VR)
+          // Game loop immer aktiv (funktioniert Desktop + VR + AR)
           scene.setAttribute("buzzer-game-loop", "");
 
           scene.addEventListener("enter-vr", () => {
+            isARMode = false;
             left && left.setAttribute("visible", "true");
             right && right.setAttribute("visible", "true");
 
@@ -416,21 +416,38 @@
 
                 // ✅ DIREKT DANACH speichern wir die Position/Rotation
                 setTimeout(() => {
-                  vrStartRigPos = { ...rig.getAttribute("position") };
-                  vrStartRigRot = { ...rig.getAttribute("rotation") };
+                  xrStartRigPos = { ...rig.getAttribute("position") };
+                  xrStartRigRot = { ...rig.getAttribute("rotation") };
                 }, 0);
               });
             });
+          });
+
+          scene.addEventListener("enter-ar", () => {
+            isARMode = true;
+            left && left.setAttribute("visible", "false");
+            right && right.setAttribute("visible", "false");
+
+            // ✅ In AR-Modus: Position beibehalten aber Rotation reset
+            if (cam) {
+              cam.setAttribute("rotation", "0 0 0");
+            }
+
+            // ✅ AR-Startposition speichern
+            setTimeout(() => {
+              xrStartRigPos = { ...rig.getAttribute("position") };
+              xrStartRigRot = { ...rig.getAttribute("rotation") };
+            }, 100);
           });
 
           scene.addEventListener("exit-vr", () => {
             left && left.setAttribute("visible", "false");
             right && right.setAttribute("visible", "false");
 
-            // ✅ Zurück zum VR-Startpunkt (vor Automat)
-            if (vrStartRigPos && vrStartRigRot) {
-              rig.setAttribute("position", vrStartRigPos);
-              rig.setAttribute("rotation", vrStartRigRot);
+            // ✅ Zurück zum Startpunkt (vor Automat)
+            if (xrStartRigPos && xrStartRigRot) {
+              rig.setAttribute("position", xrStartRigPos);
+              rig.setAttribute("rotation", xrStartRigRot);
             }
 
             // Optional: Blick stabilisieren nach VR Exit
@@ -438,6 +455,20 @@
               const lc = cam.components["look-controls"];
               if (typeof lc.resetOrientation === "function")
                 lc.resetOrientation();
+              cam.setAttribute("rotation", "0 0 0");
+            }
+          });
+
+          scene.addEventListener("exit-ar", () => {
+            isARMode = false;
+
+            // ✅ Zurück zum AR-Startpunkt
+            if (xrStartRigPos && xrStartRigRot) {
+              rig.setAttribute("position", xrStartRigPos);
+              rig.setAttribute("rotation", xrStartRigRot);
+            }
+
+            if (cam) {
               cam.setAttribute("rotation", "0 0 0");
             }
           });
@@ -491,7 +522,8 @@
 
           const startButton = document.getElementById("startButton");
           const difficultyButton = document.getElementById("difficultyButton");
-          const resetHighscoreButton = document.getElementById("resetHighscore");
+          const resetHighscoreButton =
+            document.getElementById("resetHighscore");
 
           if (window.localStorage) {
             const saved = localStorage.getItem("buzzerXRHighscore");
@@ -509,7 +541,7 @@
             difficultyIndex = index;
             difficultyLabel.setAttribute(
               "value",
-              difficulties[difficultyIndex].name
+              difficulties[difficultyIndex].name,
             );
           }
 
@@ -531,11 +563,17 @@
             highscoreText.setAttribute("visible", !gameRunning);
             reactionText.setAttribute("visible", !gameRunning);
             startButton.setAttribute("visible", !gameRunning);
-            document.getElementById("startLabel").setAttribute("visible", !gameRunning);
+            document
+              .getElementById("startLabel")
+              .setAttribute("visible", !gameRunning);
             resetHighscoreButton.setAttribute("visible", !gameRunning);
-            document.getElementById("resetLabel").setAttribute("visible", !gameRunning);
+            document
+              .getElementById("resetLabel")
+              .setAttribute("visible", !gameRunning);
             difficultyButton.setAttribute("visible", !gameRunning);
-            document.getElementById("difficultyLabel").setAttribute("visible", !gameRunning);
+            document
+              .getElementById("difficultyLabel")
+              .setAttribute("visible", !gameRunning);
 
             timerText.setAttribute("visible", gameRunning);
             scoreText.setAttribute("visible", gameRunning);
@@ -549,7 +587,7 @@
             } else {
               reactionText.setAttribute(
                 "value",
-                "Reaktion: " + Math.round(bestReaction) + " ms"
+                "Reaktion: " + Math.round(bestReaction) + " ms",
               );
             }
           }
@@ -589,7 +627,7 @@
             buzzer.setAttribute("rotation", "90 0 0");
             buzzer.setAttribute(
               "geometry",
-              "primitive: cylinder; radius: 0.08; height: 0.08"
+              "primitive: cylinder; radius: 0.08; height: 0.08",
             );
             buzzer.setAttribute("material", "color: #ff0000; shader: flat");
 
@@ -597,11 +635,12 @@
               if (!gameRunning || buzzer !== currentBuzzer) return;
               const rt = performance.now() - buzzerSpawnTime;
               score += Math.max(10, 1500 - rt);
-              bestReaction = bestReaction == null ? rt : Math.min(bestReaction, rt);
+              bestReaction =
+                bestReaction == null ? rt : Math.min(bestReaction, rt);
               buzzer.setAttribute("material", "color: #00ff00");
               buzzer.setAttribute(
                 "animation__hit",
-                "property: scale; from: 1 1 1; to: 1.4 1.4 1.4; dur: 180"
+                "property: scale; from: 1 1 1; to: 1.4 1.4 1.4; dur: 180",
               );
               setTimeout(() => removeCurrentBuzzer(false), 180);
               updateHUD();
@@ -613,7 +652,8 @@
             buzzerSpawnTime = performance.now();
 
             buzzerTimeoutId = setTimeout(() => {
-              if (!gameRunning || !currentBuzzer || currentBuzzer !== buzzer) return;
+              if (!gameRunning || !currentBuzzer || currentBuzzer !== buzzer)
+                return;
               removeCurrentBuzzer(true);
               scheduleNextSpawn();
             }, diff.buzzerLifetime * 1000);
@@ -644,7 +684,8 @@
             removeCurrentBuzzer(false);
             if (score > highscore) {
               highscore = Math.round(score);
-              if (window.localStorage) localStorage.setItem("buzzerXRHighscore", highscore);
+              if (window.localStorage)
+                localStorage.setItem("buzzerXRHighscore", highscore);
             }
             updateHUD();
             screenText.setAttribute(
@@ -652,10 +693,12 @@
               "GAME OVER\nScore: " +
                 Math.round(score) +
                 "\nBeste Reaktion: " +
-                (bestReaction == null ? "--" : Math.round(bestReaction) + " ms") +
+                (bestReaction == null
+                  ? "--"
+                  : Math.round(bestReaction) + " ms") +
                 "\nHighscore: " +
                 highscore +
-                "\nDruecke START fuer neue Runde"
+                "\nDruecke START fuer neue Runde",
             );
           }
 
@@ -676,7 +719,9 @@
 
           startButton.addEventListener("click", () => startGame());
           difficultyButton.addEventListener("click", () => cycleDifficulty());
-          resetHighscoreButton.addEventListener("click", () => resetHighscore());
+          resetHighscoreButton.addEventListener("click", () =>
+            resetHighscore(),
+          );
 
           setDifficulty(difficultyIndex);
           updateHUD();
