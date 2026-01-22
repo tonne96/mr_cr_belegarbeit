@@ -8,9 +8,43 @@
     <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
     <!-- Optionale Hilfskomponenten -->
     <script src="https://unpkg.com/aframe-event-set-component@5.0.0/dist/aframe-event-set-component.min.js"></script>
+    <style>
+      body {
+        margin: 0;
+        font-family: Arial, sans-serif;
+      }
+      .xr-button {
+        position: fixed;
+        top: 20px;
+        background-color: #1f7e6f;
+        color: white;
+        padding: 12px 24px;
+        border-radius: 8px;
+        border: none;
+        cursor: pointer;
+        font-size: 16px;
+        font-weight: bold;
+        z-index: 100;
+        display: none;
+      }
+      .xr-button:hover {
+        background-color: #2a9a85;
+      }
+      .xr-button.available {
+        display: block;
+      }
+      #vrButton {
+        right: 280px;
+      }
+      #arButton {
+        right: 20px;
+      }
+    </style>
   </head>
 
   <body>
+    <button id="vrButton" class="xr-button">🥽 VR starten</button>
+    <button id="arButton" class="xr-button">📱 AR starten</button>
     <a-scene
       xr-mode-ui="enabled: true"
       renderer="antialias: true; colorManagement: true"
@@ -393,8 +427,52 @@
           const right = document.getElementById("rightHand");
           const rig = document.getElementById("rig");
           const cam = document.getElementById("camera");
+          const vrButton = document.getElementById("vrButton");
+          const arButton = document.getElementById("arButton");
 
           if (!scene || !rig) return;
+
+          // ✅ Button Handler
+          if (navigator.xr) {
+            navigator.xr.isSessionSupported("immersive-vr").then((supported) => {
+              if (supported) vrButton.classList.add("available");
+            });
+            navigator.xr.isSessionSupported("immersive-ar").then((supported) => {
+              if (supported) arButton.classList.add("available");
+            });
+          }
+
+          vrButton.addEventListener("click", async () => {
+            if (scene.is("vr-mode")) {
+              scene.exitVR();
+            } else {
+              try {
+                const session = await navigator.xr.requestSession("immersive-vr", {
+                  requiredFeatures: ["local-floor"],
+                });
+                scene.enterVR();
+              } catch (e) {
+                console.error("VR Error:", e);
+              }
+            }
+          });
+
+          arButton.addEventListener("click", async () => {
+            if (scene.is("ar-mode")) {
+              scene.exitAR();
+            } else {
+              try {
+                const session = await navigator.xr.requestSession("immersive-ar", {
+                  requiredFeatures: ["hit-test"],
+                  optionalFeatures: ["dom-overlay"],
+                  domOverlay: { root: document.body },
+                });
+                scene.enterAR();
+              } catch (e) {
+                console.error("AR Error:", e);
+              }
+            }
+          });
 
           // ✅ Hier speichern wir die "Startposition vor dem Automaten"
           let xrStartRigPos = null;
@@ -406,6 +484,8 @@
 
           scene.addEventListener("enter-vr", () => {
             isARMode = false;
+            vrButton.textContent = "🥽 VR beenden";
+            arButton.style.display = "none";
             left && left.setAttribute("visible", "true");
             right && right.setAttribute("visible", "true");
 
@@ -423,24 +503,9 @@
             });
           });
 
-          scene.addEventListener("enter-ar", () => {
-            isARMode = true;
-            left && left.setAttribute("visible", "false");
-            right && right.setAttribute("visible", "false");
-
-            // ✅ In AR-Modus: Position beibehalten aber Rotation reset
-            if (cam) {
-              cam.setAttribute("rotation", "0 0 0");
-            }
-
-            // ✅ AR-Startposition speichern
-            setTimeout(() => {
-              xrStartRigPos = { ...rig.getAttribute("position") };
-              xrStartRigRot = { ...rig.getAttribute("rotation") };
-            }, 100);
-          });
-
           scene.addEventListener("exit-vr", () => {
+            vrButton.textContent = "🥽 VR starten";
+            arButton.style.display = "block";
             left && left.setAttribute("visible", "false");
             right && right.setAttribute("visible", "false");
 
@@ -459,8 +524,29 @@
             }
           });
 
+          scene.addEventListener("enter-ar", () => {
+            isARMode = true;
+            arButton.textContent = "📱 AR beenden";
+            vrButton.style.display = "none";
+            left && left.setAttribute("visible", "false");
+            right && right.setAttribute("visible", "false");
+
+            // ✅ In AR-Modus: Position beibehalten aber Rotation reset
+            if (cam) {
+              cam.setAttribute("rotation", "0 0 0");
+            }
+
+            // ✅ AR-Startposition speichern
+            setTimeout(() => {
+              xrStartRigPos = { ...rig.getAttribute("position") };
+              xrStartRigRot = { ...rig.getAttribute("rotation") };
+            }, 100);
+          });
+
           scene.addEventListener("exit-ar", () => {
             isARMode = false;
+            arButton.textContent = "📱 AR starten";
+            vrButton.style.display = "block";
 
             // ✅ Zurück zum AR-Startpunkt
             if (xrStartRigPos && xrStartRigRot) {
