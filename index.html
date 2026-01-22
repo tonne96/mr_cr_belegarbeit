@@ -434,12 +434,16 @@
 
           // ✅ Button Handler
           if (navigator.xr) {
-            navigator.xr.isSessionSupported("immersive-vr").then((supported) => {
-              if (supported) vrButton.classList.add("available");
-            });
-            navigator.xr.isSessionSupported("immersive-ar").then((supported) => {
-              if (supported) arButton.classList.add("available");
-            });
+            navigator.xr
+              .isSessionSupported("immersive-vr")
+              .then((supported) => {
+                if (supported) vrButton.classList.add("available");
+              });
+            navigator.xr
+              .isSessionSupported("immersive-ar")
+              .then((supported) => {
+                if (supported) arButton.classList.add("available");
+              });
           }
 
           vrButton.addEventListener("click", async () => {
@@ -447,9 +451,12 @@
               scene.exitVR();
             } else {
               try {
-                const session = await navigator.xr.requestSession("immersive-vr", {
-                  requiredFeatures: ["local-floor"],
-                });
+                const session = await navigator.xr.requestSession(
+                  "immersive-vr",
+                  {
+                    requiredFeatures: ["local-floor"],
+                  },
+                );
                 scene.enterVR();
               } catch (e) {
                 console.error("VR Error:", e);
@@ -462,11 +469,14 @@
               scene.exitAR();
             } else {
               try {
-                const session = await navigator.xr.requestSession("immersive-ar", {
-                  requiredFeatures: ["hit-test"],
-                  optionalFeatures: ["dom-overlay"],
-                  domOverlay: { root: document.body },
-                });
+                const session = await navigator.xr.requestSession(
+                  "immersive-ar",
+                  {
+                    requiredFeatures: ["hit-test"],
+                    optionalFeatures: ["dom-overlay"],
+                    domOverlay: { root: document.body },
+                  },
+                );
                 scene.enterAR();
               } catch (e) {
                 console.error("AR Error:", e);
@@ -531,6 +541,15 @@
             left && left.setAttribute("visible", "false");
             right && right.setAttribute("visible", "false");
 
+            // ✅ AR-Modus: Hintergrund transparent machen
+            scene.setAttribute("background", "color: rgba(0, 0, 0, 0)");
+
+            // ✅ Renderer für AR optimieren
+            scene.setAttribute(
+              "renderer",
+              "colorManagement: true; antialias: true;",
+            );
+
             // ✅ In AR-Modus: Position beibehalten aber Rotation reset
             if (cam) {
               cam.setAttribute("rotation", "0 0 0");
@@ -548,6 +567,8 @@
             arButton.textContent = "📱 AR starten";
             vrButton.style.display = "block";
 
+            // ✅ Hintergrund zurück zu weiß
+            scene.setAttribute("background", "color: #ffffff");
             // ✅ Zurück zum AR-Startpunkt
             if (xrStartRigPos && xrStartRigRot) {
               rig.setAttribute("position", xrStartRigPos);
