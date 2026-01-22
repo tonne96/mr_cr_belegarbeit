@@ -12,43 +12,15 @@
       body {
         margin: 0;
       }
-      .xr-button {
-        position: fixed;
-        bottom: 20px;
-        right: 20px;
-        background-color: #1f7e6f;
-        color: white;
-        padding: 12px 24px;
-        border-radius: 8px;
-        border: none;
-        cursor: pointer;
-        font-size: 16px;
-        font-weight: bold;
-        z-index: 100;
-        display: none;
-      }
-      .xr-button:hover {
-        background-color: #2a9a85;
-      }
-      .xr-button:disabled {
-        opacity: 0.5;
-        cursor: not-allowed;
-      }
-      #arButton {
-        margin-right: 90px;
-      }
-      .xr-button.available {
-        display: block;
-      }
     </style>
   </head>
 
   <body>
-    <button id="vrButton" class="xr-button">🥽 VR starten</button>
-    <button id="arButton" class="xr-button">📱 AR starten</button>
     <a-scene
+      xr-mode-ui="enabled: true"
       renderer="antialias: true; colorManagement: true"
       background="color: #ffffff"
+      ar-hit-test="object: #automatModel"
     >
       <!-- Licht -->
       <a-entity light="type: ambient; intensity: 0.5"></a-entity>
@@ -238,6 +210,62 @@
       </a-entity>
 
       <script>
+        // =========================================================
+        // AR Hit-Testing Komponente (Hit-Test für Bodenplatzierung)
+        // =========================================================
+        AFRAME.registerComponent("ar-hit-test", {
+          schema: {
+            object: { type: "selector" }, // Das Objekt das platziert werden soll
+          },
+          init: function () {
+            const scene = this.el.sceneEl;
+            const canvas = scene.canvas;
+            const object = this.data.object;
+
+            if (!object) return;
+
+            canvas.addEventListener("click", async () => {
+              if (!scene.is("ar-mode")) return;
+
+              const session = scene.xrSession;
+              if (!session || !session.requestHitTestSource) return;
+
+              try {
+                // Hit-Test am Mittelpunkt des Bildschirms
+                const hitTestSource = await session.requestHitTestSource({
+                  space:
+                    scene.xrSession.inputSources[0]?.gripSpace ||
+                    scene.xrSession.inputSources[0]?.targetRaySpace,
+                });
+
+                const frame = scene.xrFrame;
+                if (!frame) return;
+
+                const results = frame.getHitTestResults(hitTestSource);
+                if (results.length > 0) {
+                  const hit = results[0];
+                  const pose = hit.getPose(
+                    frame.session.inputSources[0]?.gripSpace ||
+                      frame.referenceSpace,
+                  );
+
+                  if (pose) {
+                    // Objekt an Hit-Test Position platzieren
+                    const matrix = pose.transform.matrix;
+                    const position = [matrix[12], matrix[13], matrix[14]];
+                    object.setAttribute("position", position.join(" "));
+                    object.setAttribute("visible", "true");
+                  }
+                }
+              } catch (e) {
+                console.log(
+                  "Hit-Test nicht verfügbar, verwende Standard-Platzierung",
+                );
+              }
+            });
+          },
+        });
+
         // =========================================================
         // A-Frame Game Loop (VR-sicher)
         // =========================================================
@@ -462,9 +490,18 @@
             left && left.setAttribute("visible", "false");
             right && right.setAttribute("visible", "false");
 
-            // ✅ In AR-Modus: Position beibehalten aber Rotation reset
+            // ✅ In AR-Modus: Automat vor der Kamera platzieren
+            const automat = document.getElementById("automatModel");
+            if (automat) {
+              // Automat ca. 1m vor Kamera platzieren
+              automat.setAttribute("position", "0 0 -1.5");
+              automat.setAttribute("visible", "true");
+            }
+
+            // ✅ Camera auf Standard zurücksetzen
             if (cam) {
               cam.setAttribute("rotation", "0 0 0");
+              cam.setAttribute("position", "0 0 0");
             }
 
             // ✅ AR-Startposition speichern
@@ -495,6 +532,13 @@
 
           scene.addEventListener("exit-ar", () => {
             isARMode = false;
+
+            // ✅ Automat wieder ausblenden
+            const automat = document.getElementById("automatModel");
+            if (automat) {
+              automat.setAttribute("position", "-0.4 -1.35 -1");
+              automat.setAttribute("visible", "false");
+            }
 
             // ✅ Zurück zum AR-Startpunkt
             if (xrStartRigPos && xrStartRigRot) {
@@ -759,100 +803,6 @@
 
           setDifficulty(difficultyIndex);
           updateHUD();
-        })();
-
-        // =========================================================
-        // WebXR VR/AR Buttons mit direkter API
-        // =========================================================
-        (function setupXRButtons() {
-          const scene = document.querySelector("a-scene");
-          const vrButton = document.getElementById("vrButton");
-          const arButton = document.getElementById("arButton");
-
-          if (!navigator.xr) {
-            console.warn("WebXR not supported");
-            return;
-          }
-
-          let vrSession = null;
-          let arSession = null;
-
-          // VR Button
-          navigator.xr
-            .isSessionSupported("immersive-vr")
-            .then((supported) => {
-              vrButton.disabled = !supported;
-              vrButton.classList.add("available");
-
-              vrButton.addEventListener("click", async () => {
-                if (vrSession) {
-                  await vrSession.end();
-                  vrSession = null;
-                  vrButton.textContent = "🥽 VR starten";
-                } else {
-                  try {
-                    vrSession = await navigator.xr.requestSession(
-                      "immersive-vr",
-                      {
-                        requiredFeatures: ["local-floor"],
-                        optionalFeatures: ["bounded-floor", "hand-tracking"],
-                      },
-                    );
-                    vrButton.textContent = "🥽 VR beenden";
-                    scene.enterVR(vrSession);
-
-                    vrSession.addEventListener("end", () => {
-                      vrSession = null;
-                      vrButton.textContent = "🥽 VR starten";
-                    });
-                  } catch (err) {
-                    console.error("VR Request failed:", err);
-                  }
-                }
-              });
-            })
-            .catch((err) => {
-              console.error("VR Support check failed:", err);
-            });
-
-          // AR Button
-          navigator.xr
-            .isSessionSupported("immersive-ar")
-            .then((supported) => {
-              arButton.disabled = !supported;
-              arButton.classList.add("available");
-
-              arButton.addEventListener("click", async () => {
-                if (arSession) {
-                  await arSession.end();
-                  arSession = null;
-                  arButton.textContent = "📱 AR starten";
-                } else {
-                  try {
-                    arSession = await navigator.xr.requestSession(
-                      "immersive-ar",
-                      {
-                        requiredFeatures: ["hit-test"],
-                        optionalFeatures: ["dom-overlay"],
-                        domOverlay: { root: document.body },
-                      },
-                    );
-                    arButton.textContent = "📱 AR beenden";
-                    scene.enterAR(arSession);
-
-                    arSession.addEventListener("end", () => {
-                      arSession = null;
-                      arButton.textContent = "📱 AR starten";
-                    });
-                  } catch (err) {
-                    console.error("AR Request failed:", err);
-                  }
-                }
-              });
-            })
-            .catch((err) => {
-              console.error("AR Support check failed:", err);
-            });
         })();
       </script>
     </a-scene>
