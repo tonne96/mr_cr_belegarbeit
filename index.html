@@ -8,11 +8,6 @@
     <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
     <!-- Optionale Hilfskomponenten -->
     <script src="https://unpkg.com/aframe-event-set-component@5.0.0/dist/aframe-event-set-component.min.js"></script>
-    <style>
-      body {
-        margin: 0;
-      }
-    </style>
   </head>
 
   <body>
@@ -20,7 +15,6 @@
       xr-mode-ui="enabled: true"
       renderer="antialias: true; colorManagement: true"
       background="color: #ffffff"
-      ar-hit-test="object: #automatModel"
     >
       <!-- Licht -->
       <a-entity light="type: ambient; intensity: 0.5"></a-entity>
@@ -210,62 +204,6 @@
       </a-entity>
 
       <script>
-        // =========================================================
-        // AR Hit-Testing Komponente (Hit-Test für Bodenplatzierung)
-        // =========================================================
-        AFRAME.registerComponent("ar-hit-test", {
-          schema: {
-            object: { type: "selector" }, // Das Objekt das platziert werden soll
-          },
-          init: function () {
-            const scene = this.el.sceneEl;
-            const canvas = scene.canvas;
-            const object = this.data.object;
-
-            if (!object) return;
-
-            canvas.addEventListener("click", async () => {
-              if (!scene.is("ar-mode")) return;
-
-              const session = scene.xrSession;
-              if (!session || !session.requestHitTestSource) return;
-
-              try {
-                // Hit-Test am Mittelpunkt des Bildschirms
-                const hitTestSource = await session.requestHitTestSource({
-                  space:
-                    scene.xrSession.inputSources[0]?.gripSpace ||
-                    scene.xrSession.inputSources[0]?.targetRaySpace,
-                });
-
-                const frame = scene.xrFrame;
-                if (!frame) return;
-
-                const results = frame.getHitTestResults(hitTestSource);
-                if (results.length > 0) {
-                  const hit = results[0];
-                  const pose = hit.getPose(
-                    frame.session.inputSources[0]?.gripSpace ||
-                      frame.referenceSpace,
-                  );
-
-                  if (pose) {
-                    // Objekt an Hit-Test Position platzieren
-                    const matrix = pose.transform.matrix;
-                    const position = [matrix[12], matrix[13], matrix[14]];
-                    object.setAttribute("position", position.join(" "));
-                    object.setAttribute("visible", "true");
-                  }
-                }
-              } catch (e) {
-                console.log(
-                  "Hit-Test nicht verfügbar, verwende Standard-Platzierung",
-                );
-              }
-            });
-          },
-        });
-
         // =========================================================
         // A-Frame Game Loop (VR-sicher)
         // =========================================================
@@ -490,18 +428,9 @@
             left && left.setAttribute("visible", "false");
             right && right.setAttribute("visible", "false");
 
-            // ✅ In AR-Modus: Automat vor der Kamera platzieren
-            const automat = document.getElementById("automatModel");
-            if (automat) {
-              // Automat ca. 1m vor Kamera platzieren
-              automat.setAttribute("position", "0 0 -1.5");
-              automat.setAttribute("visible", "true");
-            }
-
-            // ✅ Camera auf Standard zurücksetzen
+            // ✅ In AR-Modus: Position beibehalten aber Rotation reset
             if (cam) {
               cam.setAttribute("rotation", "0 0 0");
-              cam.setAttribute("position", "0 0 0");
             }
 
             // ✅ AR-Startposition speichern
@@ -532,13 +461,6 @@
 
           scene.addEventListener("exit-ar", () => {
             isARMode = false;
-
-            // ✅ Automat wieder ausblenden
-            const automat = document.getElementById("automatModel");
-            if (automat) {
-              automat.setAttribute("position", "-0.4 -1.35 -1");
-              automat.setAttribute("visible", "false");
-            }
 
             // ✅ Zurück zum AR-Startpunkt
             if (xrStartRigPos && xrStartRigRot) {
