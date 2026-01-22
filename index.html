@@ -8,9 +8,36 @@
     <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
     <!-- Optionale Hilfskomponenten -->
     <script src="https://unpkg.com/aframe-event-set-component@5.0.0/dist/aframe-event-set-component.min.js"></script>
+    <style>
+      body {
+        margin: 0;
+      }
+      #arButton {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        background-color: #1f7e6f;
+        color: white;
+        padding: 12px 24px;
+        border-radius: 8px;
+        border: none;
+        cursor: pointer;
+        font-size: 16px;
+        font-weight: bold;
+        z-index: 100;
+        display: none;
+      }
+      #arButton:hover {
+        background-color: #2a9a85;
+      }
+      #arButton.available {
+        display: block;
+      }
+    </style>
   </head>
 
   <body>
+    <button id="arButton">📱 AR starten</button>
     <a-scene
       xr-mode-ui="enabled: true"
       renderer="antialias: true; colorManagement: true"
@@ -725,6 +752,80 @@
 
           setDifficulty(difficultyIndex);
           updateHUD();
+        })();
+
+        // =========================================================
+        // AR Button Handler
+        // =========================================================
+        (function setupARButton() {
+          const arButton = document.getElementById("arButton");
+          const scene = document.querySelector("a-scene");
+
+          if (!arButton || !scene) return;
+
+          // Prüfe ob AR unterstützt wird
+          if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+            // Versuche AR-Unterstützung zu erkennen
+            if (scene.xrSession || (window.XRSession && navigator.xr)) {
+              arButton.classList.add("available");
+            }
+          }
+
+          // Versuche AR zu starten, wenn Button geklickt wird
+          arButton.addEventListener("click", async () => {
+            try {
+              if (scene.is("ar-mode")) {
+                // AR beenden
+                scene.exitXR();
+              } else {
+                // AR starten
+                const enterXRButton = document.querySelector(
+                  "button[aria-label*='AR']",
+                );
+                if (enterXRButton) {
+                  enterXRButton.click();
+                } else {
+                  // Fallback: Versuche direkt AR zu starten
+                  const options = {
+                    requiredFeatures: ["hit-test", "dom-overlay"],
+                    domOverlay: { root: document.body },
+                  };
+                  if (navigator.xr) {
+                    try {
+                      const session = await navigator.xr.requestSession(
+                        "immersive-ar",
+                        options,
+                      );
+                      scene.xrSession = session;
+                      scene.enterAR();
+                    } catch (e) {
+                      // AR nicht verfügbar, zeige Meldung
+                      alert(
+                        "Augmented Reality wird auf diesem Gerät nicht unterstützt.",
+                      );
+                    }
+                  }
+                }
+              }
+            } catch (error) {
+              console.error("AR Fehler:", error);
+            }
+          });
+
+          // Zeige AR Button wenn Seite geladen ist (nach Prüfung)
+          setTimeout(() => {
+            // A-Frame sollte bis hier geladen sein
+            // Prüfe nochmal ob AR Button in der XR-UI existiert
+            const xrUI = document.querySelector(".a-xr-ui");
+            if (xrUI) {
+              const arModeButton = Array.from(
+                xrUI.querySelectorAll("button"),
+              ).find((btn) => btn.textContent.includes("AR"));
+              if (arModeButton) {
+                arButton.classList.add("available");
+              }
+            }
+          }, 1000);
         })();
       </script>
     </a-scene>
