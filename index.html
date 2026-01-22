@@ -12,7 +12,7 @@
       body {
         margin: 0;
       }
-      #arButton {
+      .xr-button {
         position: fixed;
         bottom: 20px;
         right: 20px;
@@ -27,19 +27,26 @@
         z-index: 100;
         display: none;
       }
-      #arButton:hover {
+      .xr-button:hover {
         background-color: #2a9a85;
       }
-      #arButton.available {
+      .xr-button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      #arButton {
+        margin-right: 90px;
+      }
+      .xr-button.available {
         display: block;
       }
     </style>
   </head>
 
   <body>
-    <button id="arButton">📱 AR starten</button>
+    <button id="vrButton" class="xr-button">🥽 VR starten</button>
+    <button id="arButton" class="xr-button">📱 AR starten</button>
     <a-scene
-      xr-mode-ui="enabled: true"
       renderer="antialias: true; colorManagement: true"
       background="color: #ffffff"
     >
@@ -755,52 +762,97 @@
         })();
 
         // =========================================================
-        // XR Button Handler (VR & AR)
+        // WebXR VR/AR Buttons mit direkter API
         // =========================================================
         (function setupXRButtons() {
-          const arButton = document.getElementById("arButton");
           const scene = document.querySelector("a-scene");
+          const vrButton = document.getElementById("vrButton");
+          const arButton = document.getElementById("arButton");
 
-          if (!arButton || !scene) return;
+          if (!navigator.xr) {
+            console.warn("WebXR not supported");
+            return;
+          }
 
-          // Prüfe XR-Unterstützung nach A-Frame Init
-          setTimeout(() => {
-            const xrUI = document.querySelector(".a-xr-ui");
-            if (!xrUI) {
-              console.log(
-                "XR UI nicht gefunden, XR wahrscheinlich nicht verfügbar",
-              );
-              return;
-            }
+          let vrSession = null;
+          let arSession = null;
 
-            // Suche AR Button in A-Frame XR UI
-            const buttons = Array.from(xrUI.querySelectorAll("button"));
-            const arModeButton = buttons.find(
-              (btn) =>
-                btn.textContent.includes("AR") ||
-                btn.getAttribute("aria-label")?.includes("AR"),
-            );
-            const vrModeButton = buttons.find(
-              (btn) =>
-                btn.textContent.includes("VR") ||
-                btn.getAttribute("aria-label")?.includes("VR"),
-            );
+          // VR Button
+          navigator.xr
+            .isSessionSupported("immersive-vr")
+            .then((supported) => {
+              vrButton.disabled = !supported;
+              vrButton.classList.add("available");
 
-            // Zeige custom AR Button nur wenn AR im A-Frame verfügbar ist
-            if (arModeButton) {
-              arButton.classList.add("available");
-              arButton.addEventListener("click", () => {
-                arModeButton.click();
+              vrButton.addEventListener("click", async () => {
+                if (vrSession) {
+                  await vrSession.end();
+                  vrSession = null;
+                  vrButton.textContent = "🥽 VR starten";
+                } else {
+                  try {
+                    vrSession = await navigator.xr.requestSession(
+                      "immersive-vr",
+                      {
+                        requiredFeatures: ["local-floor"],
+                        optionalFeatures: ["bounded-floor", "hand-tracking"],
+                      },
+                    );
+                    vrButton.textContent = "🥽 VR beenden";
+                    scene.enterVR(vrSession);
+
+                    vrSession.addEventListener("end", () => {
+                      vrSession = null;
+                      vrButton.textContent = "🥽 VR starten";
+                    });
+                  } catch (err) {
+                    console.error("VR Request failed:", err);
+                  }
+                }
               });
-            } else if (vrModeButton) {
-              // Auf Quest: Zeige Button für VR (mit Passthrough)
-              arButton.textContent = "📱 MR starten (VR)";
+            })
+            .catch((err) => {
+              console.error("VR Support check failed:", err);
+            });
+
+          // AR Button
+          navigator.xr
+            .isSessionSupported("immersive-ar")
+            .then((supported) => {
+              arButton.disabled = !supported;
               arButton.classList.add("available");
-              arButton.addEventListener("click", () => {
-                vrModeButton.click();
+
+              arButton.addEventListener("click", async () => {
+                if (arSession) {
+                  await arSession.end();
+                  arSession = null;
+                  arButton.textContent = "📱 AR starten";
+                } else {
+                  try {
+                    arSession = await navigator.xr.requestSession(
+                      "immersive-ar",
+                      {
+                        requiredFeatures: ["hit-test"],
+                        optionalFeatures: ["dom-overlay"],
+                        domOverlay: { root: document.body },
+                      },
+                    );
+                    arButton.textContent = "📱 AR beenden";
+                    scene.enterAR(arSession);
+
+                    arSession.addEventListener("end", () => {
+                      arSession = null;
+                      arButton.textContent = "📱 AR starten";
+                    });
+                  } catch (err) {
+                    console.error("AR Request failed:", err);
+                  }
+                }
               });
-            }
-          }, 2000);
+            })
+            .catch((err) => {
+              console.error("AR Support check failed:", err);
+            });
         })();
       </script>
     </a-scene>
