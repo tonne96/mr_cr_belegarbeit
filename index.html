@@ -46,8 +46,9 @@
     <button id="vrButton" class="xr-button">🥽 VR starten</button>
     <button id="arButton" class="xr-button">📱 AR starten</button>
     <a-scene
+      disable-xr-resize
       xr-mode-ui="enabled: false"
-      renderer="antialias: true; colorManagement: true"
+      renderer="antialias: true; colorManagement: true; alpha: true"
       background="color: #ffffff"
     >
       <!-- Licht -->
@@ -72,14 +73,13 @@
       ></a-entity>
 
       <a-entity id="arcade" position="0 0 -2">
-        <!-- Bildschirm Container (alles Spiel läuft hier) -->
+        <!-- Spiel Container skaliert um auf Spielautomat zu passen -->
         <a-entity
           id="screenContainer"
           scale="1.75 1.75 1.75"
           position="0.35 2.5 0.36"
           rotation="-25 0 0"
         >
-          <!-- Bildschirm Text -->
           <a-text
             id="screenText"
             position="0 0.5 0"
@@ -90,7 +90,6 @@
             value="BUZZER REACTION XR&#10; Druecke START"
           ></a-text>
 
-          <!-- Start-Button -->
           <a-cylinder
             id="startButton"
             class="clickable"
@@ -111,7 +110,6 @@
             scale="0.2 0.2 0.2"
           ></a-text>
 
-          <!-- Schwierigkeits-Button -->
           <a-cylinder
             id="difficultyButton"
             class="clickable"
@@ -132,7 +130,6 @@
             scale="0.18 0.18 0.18"
           ></a-text>
 
-          <!-- Reset Highscore -->
           <a-cylinder
             id="resetHighscore"
             class="clickable"
@@ -153,7 +150,7 @@
             color="#ffffff"
           ></a-text>
 
-          <!-- HUD -->
+          <!-- Anzeige -->
           <a-text
             id="timerText"
             value="Zeit: 0.0"
@@ -187,12 +184,11 @@
             scale="0.15 0.15 0.15"
           ></a-text>
 
-          <!-- Container für Buzzer -->
           <a-entity id="buzzerContainer"></a-entity>
         </a-entity>
       </a-entity>
 
-      <!-- Sounds-->
+      <!-- Musik-->
       <a-sound
         id="sndStart"
         src="#audioStart"
@@ -238,40 +234,87 @@
       </a-entity>
 
       <script>
-        // =========================================================
-        // A-Frame Game Loop (VR-sicher)
-        // =========================================================
-        AFRAME.registerComponent("buzzer-game-loop", {
-          tick: function (time, timeDelta) {
-            if (window.__buzzerTick) window.__buzzerTick(timeDelta / 1000);
-          },
-        });
-
-        // =========================================================
-        // VR Trigger => "click" auf Raycaster-Ziel
-        // =========================================================
-        AFRAME.registerComponent("vr-click", {
+        /**
+         * Verhindert Canvas-Resize während XR initialisiert
+         * Blockiert die A-Frame Resize-Funktion temporär um den Fehler zu vermeiden
+         */
+        AFRAME.registerComponent("disable-xr-resize", {
           init: function () {
-            const fire = () => {
-              const ray = this.el.components.raycaster;
-              if (!ray) return;
-              const hits = ray.intersections;
-              if (!hits || hits.length === 0) return;
+            const scene = this.el;
+            let isXRLoading = false;
 
-              const targetEl = hits[0].object && hits[0].object.el;
-              if (targetEl) targetEl.emit("click");
+            const originalResize = scene.resize.bind(scene);
+            scene.resize = function () {
+              if (isXRLoading) return; // Blockiere Resize während XR lädt
+              return originalResize();
             };
 
-            this.el.addEventListener("triggerdown", fire);
-            this.el.addEventListener("gripdown", fire);
-            this.el.addEventListener("abuttondown", fire);
-            this.el.addEventListener("xbuttondown", fire);
+            // XR ist beim Start
+            scene.addEventListener("enter-vr", () => {
+              isXRLoading = true;
+            });
+            scene.addEventListener("enter-ar", () => {
+              isXRLoading = true;
+            });
+
+            // XR ist fertig oder beendet
+            setTimeout(() => {
+              scene.addEventListener("exit-vr", () => {
+                isXRLoading = false;
+              });
+              scene.addEventListener("exit-ar", () => {
+                isXRLoading = false;
+              });
+            }, 100);
           },
         });
 
-        // =========================================================
-        // VR Joystick Locomotion
-        // =========================================================
+        /**
+         * Game Loop Komponente
+         * Diese Komponente wird jeden Frame aufgerufen und leitet die Zeit an
+         * die Game-Logik weiter. So wird sichergestellt, dass das Spiel in VR/AR läuft.
+         */
+        AFRAME.registerComponent("buzzer-game-loop", {
+          tick: function (time, timeDelta) {
+            if (window.__buzzerTick) {
+              window.__buzzerTick(timeDelta / 1000);
+            }
+          },
+        });
+
+        /**
+         * VR Controller Click Komponente
+         * Erkennt Controller-Button-Presses und wandelt sie in Click-Events um.
+         * Das ermöglicht es, interaktive Objekte mit VR-Controllern anzuklicken.
+         */
+        AFRAME.registerComponent("vr-click", {
+          init: function () {
+            const fireClick = () => {
+              const raycaster = this.el.components.raycaster;
+              if (!raycaster) return;
+
+              const hits = raycaster.intersections;
+              if (!hits || hits.length === 0) return;
+
+              const clickedElement = hits[0].object?.el;
+              if (clickedElement) {
+                clickedElement.emit("click");
+              }
+            };
+
+            // Verschiedene Controller-Tasten als Click interpretieren
+            this.el.addEventListener("triggerdown", fireClick);
+            this.el.addEventListener("gripdown", fireClick);
+            this.el.addEventListener("abuttondown", fireClick);
+            this.el.addEventListener("xbuttondown", fireClick);
+          },
+        });
+
+        /**
+         * VR Bewegungs-Komponente (Joystick)
+         * Liest den linken Controller-Joystick aus und bewegt den Spieler
+         * in die Richtung, in die er schaut (relative Bewegung).
+         */
         AFRAME.registerComponent("vr-joystick-locomotion", {
           schema: {
             speed: { type: "number", default: 2.0 },
@@ -279,61 +322,50 @@
           },
           tick: function (time, timeDelta) {
             const scene = this.el.sceneEl;
-            if (!scene || !scene.is("vr-mode")) return;
+            if (!scene?.is("vr-mode")) return;
 
             const rig = document.getElementById("rig");
             const cam = document.getElementById("camera");
             if (!rig || !cam) return;
 
-            const tracked = this.el.components["tracked-controls"];
-            if (!tracked || !tracked.controller) return;
+            const gamepad =
+              this.el.components["tracked-controls"]?.controller?.gamepad;
+            if (!gamepad?.axes) return;
 
-            const gp = tracked.controller.gamepad;
-            if (!gp || !gp.axes) return;
+            // Joystick-Achsen auslesen (mit Fallback für verschiedene Controller)
+            let joystickX = gamepad.axes[2] ?? gamepad.axes[0] ?? 0;
+            let joystickY = gamepad.axes[3] ?? gamepad.axes[1] ?? 0;
 
-            const axes = gp.axes;
-
-            // Häufig: axes[2]/[3] sonst fallback axes[0]/[1]
-            let axX = axes.length >= 4 ? axes[2] : axes[0];
-            let axY = axes.length >= 4 ? axes[3] : axes[1];
-
-            // Fallback wenn [2,3] leer sind
-            if (Math.abs(axX) < 0.001 && Math.abs(axY) < 0.001) {
-              axX = axes[0] ?? 0;
-              axY = axes[1] ?? 0;
-            }
-
-            // Deadzone
-            if (Math.abs(axX) < this.data.deadzone) axX = 0;
-            if (Math.abs(axY) < this.data.deadzone) axY = 0;
-            if (axX === 0 && axY === 0) return;
+            // Deadzone: Kleine Inputs ignorieren um Drift zu vermeiden
+            if (Math.abs(joystickX) < this.data.deadzone) joystickX = 0;
+            if (Math.abs(joystickY) < this.data.deadzone) joystickY = 0;
+            if (joystickX === 0 && joystickY === 0) return;
 
             const dt = timeDelta / 1000;
+            const cameraRotation = cam.getAttribute("rotation").y;
+            const yaw = (cameraRotation * Math.PI) / 180;
 
-            // Blickrichtung (Yaw) der Kamera
-            const yaw = (cam.getAttribute("rotation").y * Math.PI) / 180;
+            // Berechne Bewegung relativ zur Blickrichtung
+            const forward = joystickY * this.data.speed * dt;
+            const strafe = joystickX * this.data.speed * dt;
 
-            // Vor/Zurück
-            const forward = axY * this.data.speed * dt;
-
-            // Links/Rechts
-            const strafe = axX * this.data.speed * dt;
-
-            const dx = Math.sin(yaw) * forward + Math.cos(yaw) * strafe;
-            const dz = Math.cos(yaw) * forward - Math.sin(yaw) * strafe;
+            const moveX = Math.sin(yaw) * forward + Math.cos(yaw) * strafe;
+            const moveZ = Math.cos(yaw) * forward - Math.sin(yaw) * strafe;
 
             const pos = rig.getAttribute("position");
             rig.setAttribute("position", {
-              x: pos.x + dx,
+              x: pos.x + moveX,
               y: pos.y,
-              z: pos.z + dz,
+              z: pos.z + moveZ,
             });
           },
         });
 
-        // =========================================================
-        // VR Vertical Movement (rechter Stick hoch/runter)
-        // =========================================================
+        /**
+         * VR Höhen-Bewegungs-Komponente
+         * Der rechte Joystick bewegt den Spieler nach oben/unten.
+         * Dies ermöglicht eine freie Bewegung in 3D-Raum.
+         */
         AFRAME.registerComponent("vr-vertical-move", {
           schema: {
             speed: { type: "number", default: 1.2 },
@@ -341,46 +373,49 @@
           },
           tick: function (time, timeDelta) {
             const scene = this.el.sceneEl;
-            if (!scene || !scene.is("vr-mode")) return;
+            if (!scene?.is("vr-mode")) return;
 
             const rig = document.getElementById("rig");
             if (!rig) return;
 
-            const tracked = this.el.components["tracked-controls"];
-            if (!tracked || !tracked.controller) return;
+            const gamepad =
+              this.el.components["tracked-controls"]?.controller?.gamepad;
+            if (!gamepad?.axes) return;
 
-            const gp = tracked.controller.gamepad;
-            if (!gp || !gp.axes) return;
-
-            const axes = gp.axes;
-
-            // rechter Stick Y: häufig axes[3], fallback axes[1]
-            let vertical = axes.length >= 4 ? axes[3] : axes[1];
-            if (Math.abs(vertical) < this.data.deadzone) return;
+            // Rechter Joystick Y-Achse für Auf/Ab Bewegung
+            const verticalInput = gamepad.axes[3] ?? gamepad.axes[1] ?? 0;
+            if (Math.abs(verticalInput) < this.data.deadzone) return;
 
             const dt = timeDelta / 1000;
-
-            // Stick hoch -> hoch (falls invertiert: Vorzeichen ändern)
-            const dy = -vertical * this.data.speed * dt;
+            const moveUp = -verticalInput * this.data.speed * dt;
 
             const pos = rig.getAttribute("position");
-            rig.setAttribute("position", { x: pos.x, y: pos.y + dy, z: pos.z });
+            rig.setAttribute("position", {
+              x: pos.x,
+              y: pos.y + moveUp,
+              z: pos.z,
+            });
           },
         });
 
-        // =========================================================
-        // Helper: Rig so verschieben, dass HMD-Kamera exakt auf Ziel landet
-        // =========================================================
+        /**
+         * Hilfsfunktion: Bewegt den Rig so, dass die HMD-Kamera auf ein Ziel blickt
+         * Dies wird verwendet, um den Spieler beim Eintritt in VR vor den Automaten
+         * zu platzieren und gleichzeitig die Kamera auf den Automat auszurichten.
+         */
         function moveRigSoCameraHitsWorldPos(targetWorldPos, targetYawDeg) {
           const rig = document.getElementById("rig");
           const cam = document.getElementById("camera");
           if (!rig || !cam) return;
 
+          // Hole die aktuelle Welt-Position der Kamera
           const camWorld = new THREE.Vector3();
           cam.object3D.getWorldPosition(camWorld);
 
+          // Berechne die Differenz zwischen Ziel und Kamera
           const delta = targetWorldPos.clone().sub(camWorld);
 
+          // Verschiebe den Rig um diese Differenz
           const rigPos = rig.getAttribute("position");
           rig.setAttribute("position", {
             x: rigPos.x + delta.x,
@@ -388,205 +423,228 @@
             z: rigPos.z + delta.z,
           });
 
+          // Richte den Rig in die gewünschte Richtung
           rig.setAttribute("rotation", { x: 0, y: targetYawDeg, z: 0 });
         }
 
-        // =========================================================
-        // Spawn vor Automat + Blick auf Automat
-        // =========================================================
+        /**
+         * Platziert den Spieler vor dem Automaten mit Blickrichtung auf ihn
+         * Diese Funktion wird beim VR-Start aufgerufen, um einen guten Startpunkt zu schaffen.
+         */
         function spawnInFrontOfAutomat() {
-          const autom = document.getElementById("automatModel");
-          if (!autom) return;
+          const automaton = document.getElementById("automatModel");
+          if (!automaton) return;
 
-          const automPos = new THREE.Vector3();
-          autom.object3D.getWorldPosition(automPos);
+          // Hole die Position des Automaten in der Welt
+          const automatonPos = new THREE.Vector3();
+          automaton.object3D.getWorldPosition(automatonPos);
 
-          // Forward-Richtung des Automaten (A-Frame forward = -Z)
-          const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(
-            autom.object3D.quaternion,
+          // Berechne die Blickrichtung des Automaten
+          const automatonForward = new THREE.Vector3(0, 0, -1).applyQuaternion(
+            automaton.object3D.quaternion,
           );
 
-          const distance = 1.2;
-          const targetPos = automPos
+          // Positioniere den Spieler 1.2 Einheiten vor dem Automaten
+          const spawnDistance = 1.2;
+          const spawnPos = automatonPos
             .clone()
-            .add(forward.clone().multiplyScalar(distance));
+            .add(automatonForward.clone().multiplyScalar(spawnDistance));
 
-          const automRot = autom.getAttribute("rotation");
-          const targetYaw = (automRot ? automRot.y : 0) + 180;
+          // Der Spieler blickt auf den Automaten (180° Drehung)
+          const automRot = automaton.getAttribute("rotation");
+          const lookAtYaw = (automRot ? automRot.y : 0) + 180;
 
-          moveRigSoCameraHitsWorldPos(targetPos, targetYaw);
+          moveRigSoCameraHitsWorldPos(spawnPos, lookAtYaw);
         }
 
-        // =========================================================
-        // VR/AR Enter/Exit: Controller sichtbar + Spawn nach XR init
-        // + Beim Exit zurück zum "vor dem Automaten" Punkt
-        // =========================================================
+        /**
+         * XR Setup - Verwaltet VR/AR Modus
+         * Hier werden die VR/AR-Buttons konfiguriert und die Modi werden gesteuert.
+         * Es wird zwischen VR-Mode und AR-Mode gewechselt und die Positionen werden entsprechend angepasst.
+         */
         (function setupXr() {
           const scene = document.querySelector("a-scene");
-          const left = document.getElementById("leftHand");
-          const right = document.getElementById("rightHand");
+          const leftController = document.getElementById("leftHand");
+          const rightController = document.getElementById("rightHand");
           const rig = document.getElementById("rig");
           const cam = document.getElementById("camera");
-          const vrButton = document.getElementById("vrButton");
-          const arButton = document.getElementById("arButton");
+          const vrBtn = document.getElementById("vrButton");
+          const arBtn = document.getElementById("arButton");
 
           if (!scene || !rig) return;
 
-          // ✅ Button Handler
+          // Prüfe, welche XR-Modi verfügbar sind und zeige Buttons nur wenn unterstützt
           if (navigator.xr) {
             navigator.xr
               .isSessionSupported("immersive-vr")
               .then((supported) => {
-                if (supported) vrButton.classList.add("available");
+                if (supported) vrBtn.classList.add("available");
               });
             navigator.xr
               .isSessionSupported("immersive-ar")
               .then((supported) => {
-                if (supported) arButton.classList.add("available");
+                if (supported) arBtn.classList.add("available");
               });
           }
 
-          vrButton.addEventListener("click", async () => {
+          // ============ VR Button Handling ============
+          vrBtn.addEventListener("click", async () => {
             if (scene.is("vr-mode")) {
               scene.exitVR();
             } else {
               try {
+                // VR mit minimalen Features für maximale Kompatibilität
                 const session = await navigator.xr.requestSession(
                   "immersive-vr",
                   {
-                    requiredFeatures: ["local-floor"],
+                    requiredFeatures: [],
+                    optionalFeatures: ["local-floor", "bounded-floor"],
                   },
                 );
                 scene.enterVR();
-              } catch (e) {
-                console.error("VR Error:", e);
+              } catch (error) {
+                console.error("VR konnte nicht gestartet werden:", error);
               }
             }
           });
 
-          arButton.addEventListener("click", async () => {
+          // ============ AR Button Handling ============
+          arBtn.addEventListener("click", async () => {
             if (scene.is("ar-mode")) {
               scene.exitAR();
             } else {
               try {
-                // Minimal AR-Session ohne komplexe Parameter (wie im funktionierenden Beispiel)
                 const session =
                   await navigator.xr.requestSession("immersive-ar");
                 scene.enterAR();
-              } catch (e) {
-                console.error("AR Error:", e);
-                alert(
-                  "AR nicht verfügbar. Stelle sicher, dass Kamerazugriff erlaubt ist.",
-                );
+              } catch (error) {
+                console.error("AR konnte nicht gestartet werden:", error);
+                alert("AR nicht verfügbar. Bitte Kamerazugriff erlauben.");
               }
             }
           });
 
-          // ✅ Hier speichern wir die "Startposition vor dem Automaten"
-          let xrStartRigPos = null;
-          let xrStartRigRot = null;
-          let isARMode = false;
+          // Speichern der Desktop-Startposition für den Fall, dass VR/AR beendet wird
+          let savedRigPos = null;
+          let savedRigRot = null;
 
-          // Game loop immer aktiv (funktioniert Desktop + VR + AR)
+          // Aktiviere den Game Loop für alle Modi (Desktop, VR, AR)
           scene.setAttribute("buzzer-game-loop", "");
 
+          // ============ VR Start Event ============
           scene.addEventListener("enter-vr", () => {
-            isARMode = false;
-            vrButton.textContent = "🥽 VR beenden";
-            arButton.style.display = "none";
-            left && left.setAttribute("visible", "true");
-            right && right.setAttribute("visible", "true");
+            vrBtn.textContent = "🥽 VR beenden";
+            arBtn.style.display = "none";
 
+            // Zeige Controller in VR
+            leftController?.setAttribute("visible", "true");
+            rightController?.setAttribute("visible", "true");
+
+            // Platziere Spieler vor dem Automaten
             requestAnimationFrame(() => {
               requestAnimationFrame(() => {
-                // Spawn vor Automat
                 spawnInFrontOfAutomat();
 
-                // ✅ DIREKT DANACH speichern wir die Position/Rotation
+                // Speichere die VR-Position für späteren Exit
                 setTimeout(() => {
-                  xrStartRigPos = { ...rig.getAttribute("position") };
-                  xrStartRigRot = { ...rig.getAttribute("rotation") };
+                  savedRigPos = { ...rig.getAttribute("position") };
+                  savedRigRot = { ...rig.getAttribute("rotation") };
                 }, 0);
               });
             });
           });
 
+          // ============ VR End Event ============
           scene.addEventListener("exit-vr", () => {
-            vrButton.textContent = "🥽 VR starten";
-            arButton.style.display = "block";
-            left && left.setAttribute("visible", "false");
-            right && right.setAttribute("visible", "false");
+            vrBtn.textContent = "🥽 VR starten";
+            arBtn.style.display = "block";
 
-            // ✅ Zurück zum Startpunkt (vor Automat)
-            if (xrStartRigPos && xrStartRigRot) {
-              rig.setAttribute("position", xrStartRigPos);
-              rig.setAttribute("rotation", xrStartRigRot);
+            // Verstecke Controller
+            leftController?.setAttribute("visible", "false");
+            rightController?.setAttribute("visible", "false");
+
+            // Rückkehr zur Desktop-Position
+            if (savedRigPos && savedRigRot) {
+              rig.setAttribute("position", savedRigPos);
+              rig.setAttribute("rotation", savedRigRot);
             }
 
-            // Optional: Blick stabilisieren nach VR Exit
-            if (cam && cam.components && cam.components["look-controls"]) {
-              const lc = cam.components["look-controls"];
-              if (typeof lc.resetOrientation === "function")
-                lc.resetOrientation();
-              cam.setAttribute("rotation", "0 0 0");
+            // Kameradrehung zurücksetzen
+            const lookControls = cam?.components?.["look-controls"];
+            if (lookControls?.resetOrientation) {
+              lookControls.resetOrientation();
             }
+            cam?.setAttribute("rotation", "0 0 0");
           });
 
+          // ============ AR Start Event ============
           scene.addEventListener("enter-ar", () => {
-            isARMode = true;
-            arButton.textContent = "📱 AR beenden";
-            vrButton.style.display = "none";
-            left && left.setAttribute("visible", "false");
-            right && right.setAttribute("visible", "false");
+            arBtn.textContent = "📱 AR beenden";
+            vrBtn.style.display = "none";
 
-            // ✅ Startposition speichern VOR dem Positionswechsel
-            xrStartRigPos = { ...rig.getAttribute("position") };
-            xrStartRigRot = { ...rig.getAttribute("rotation") };
+            // Verstecke Controller in AR (nicht nötig)
+            leftController?.setAttribute("visible", "false");
+            rightController?.setAttribute("visible", "false");
 
-            // ✅ AR-Modus: Hintergrund transparent machen
+            // Speichere Desktop-Position vor AR-Wechsel
+            savedRigPos = { ...rig.getAttribute("position") };
+            savedRigRot = { ...rig.getAttribute("rotation") };
+
+            // Mache Hintergrund transparent für AR
             scene.setAttribute("background", "color: rgba(0, 0, 0, 0)");
-
-            // ✅ Renderer für AR optimieren
             scene.setAttribute(
               "renderer",
               "colorManagement: true; antialias: true;",
             );
 
-            // ✅ NEU: Rig für AR positionieren (weiter weg, richtige Höhe)
-            requestAnimationFrame(() => {
-              rig.setAttribute("position", { x: 0, y: 1.8, z: 4 });
+            // Platziere Automat für AR in guter Entfernung
+            // Warte 500ms bis A-Frame AR vollständig initialisiert ist
+            setTimeout(() => {
+              // spawnposition wenn AR startet
+              rig.setAttribute("position", { x: 0, y: 1.8, z: 3 });
               rig.setAttribute("rotation", { x: 0, y: 0, z: 0 });
+              cam?.setAttribute("rotation", "0 0 0");
 
-              if (cam) {
-                cam.setAttribute("rotation", "0 0 0");
+              // Reduziere Skalierung in AR für realistischere Größe
+              const arcade = document.getElementById("arcade");
+              const screenContainer =
+                document.getElementById("screenContainer");
+              if (arcade && screenContainer) {
+                // AR-Größe: viel kleiner damit es in die reale Welt passt
+                arcade.setAttribute("scale", "0.0015 0.0015 0.0015");
+                screenContainer.setAttribute("scale", "0.0015 0.0015 0.0015");
               }
-            });
+            }, 500);
           });
 
+          // ============ AR End Event ============
           scene.addEventListener("exit-ar", () => {
-            isARMode = false;
-            arButton.textContent = "📱 AR starten";
-            vrButton.style.display = "block";
+            arBtn.textContent = "📱 AR starten";
+            vrBtn.style.display = "block";
 
-            // ✅ Hintergrund zurück zu weiß
+            // Stelle normalen weißen Hintergrund wieder her
             scene.setAttribute("background", "color: #ffffff");
-            // ✅ Zurück zum AR-Startpunkt
-            if (xrStartRigPos && xrStartRigRot) {
-              rig.setAttribute("position", xrStartRigPos);
-              rig.setAttribute("rotation", xrStartRigRot);
-            }
 
-            if (cam) {
-              cam.setAttribute("rotation", "0 0 0");
+            // Rückkehr zur Position vor AR
+            if (savedRigPos && savedRigRot) {
+              rig.setAttribute("position", savedRigPos);
+              rig.setAttribute("rotation", savedRigRot);
+            }
+            cam?.setAttribute("rotation", "0 0 0");
+
+            // Stelle ursprüngliche Skalierung wieder her
+            const arcade = document.getElementById("arcade");
+            const screenContainer = document.getElementById("screenContainer");
+            if (arcade && screenContainer) {
+              arcade.setAttribute("scale", "1 1 1");
+              screenContainer.setAttribute("scale", "1.75 1.75 1.75");
             }
           });
         })();
 
-        // =========================================================
-        // DEIN GAME CODE (Tick umgebaut auf dt-Input, VR-sicher)
-        // =========================================================
-        (() => {
-          const GAME_DURATION = 30; // Sekunden
+        // Spiellogik
+        (function initGame() {
+          const GAME_DURATION = 30;
           const difficulties = [
             {
               name: "EASY",
@@ -608,130 +666,157 @@
             },
           ];
 
-          let difficultyIndex = 1;
-          let gameRunning = false;
-          let timeLeft = GAME_DURATION;
-          let score = 0;
-          let highscore = 0;
-          let bestReaction = null;
+          // variablen
+          let currentDifficulty = 1; // normal ist Standard
+          let isGameActive = false;
+          let remainingTime = GAME_DURATION;
+          let playerScore = 0;
+          let savedHighscore = 0;
+          let bestReactionTime = null;
 
-          let nextSpawnTime = 0;
-          let currentBuzzer = null;
-          let buzzerSpawnTime = 0;
+          // buzzer verwaltung
+          let nextBuzzerSpawnTime = 0;
+          let activeBuzzer = null;
+          let buzzerSpawnedAt = 0;
           let buzzerTimeoutId = null;
 
-          const buzzerContainer = document.getElementById("buzzerContainer");
-          const timerText = document.getElementById("timerText");
-          const scoreText = document.getElementById("scoreText");
-          const highscoreText = document.getElementById("highscoreText");
-          const reactionText = document.getElementById("reactionText");
-          const screenText = document.getElementById("screenText");
+          // dom referenzen
+          const screenUIContainer = document.getElementById("buzzerContainer");
+          const timerDisplay = document.getElementById("timerText");
+          const scoreDisplay = document.getElementById("scoreText");
+          const highscoreDisplay = document.getElementById("highscoreText");
+          const reactionDisplay = document.getElementById("reactionText");
+          const screenTextDisplay = document.getElementById("screenText");
           const difficultyLabel = document.getElementById("difficultyLabel");
+          const startBtn = document.getElementById("startButton");
+          const difficultyBtn = document.getElementById("difficultyButton");
+          const resetHighscoreBtn = document.getElementById("resetHighscore");
 
-          const startButton = document.getElementById("startButton");
-          const difficultyButton = document.getElementById("difficultyButton");
-          const resetHighscoreButton =
-            document.getElementById("resetHighscore");
-
+          // highscore laden
           if (window.localStorage) {
-            const saved = localStorage.getItem("buzzerXRHighscore");
-            if (saved) {
-              highscore = parseInt(saved, 10) || 0;
-              highscoreText.setAttribute("value", "Highscore: " + highscore);
-            }
-          }
-
-          function formatTime(t) {
-            return "Zeit: " + t.toFixed(1);
-          }
-
-          function setDifficulty(index) {
-            difficultyIndex = index;
-            difficultyLabel.setAttribute(
-              "value",
-              difficulties[difficultyIndex].name,
-            );
-          }
-
-          function cycleDifficulty() {
-            if (gameRunning) return;
-            difficultyIndex = (difficultyIndex + 1) % difficulties.length;
-            setDifficulty(difficultyIndex);
-          }
-
-          function resetHighscore() {
-            if (window.localStorage)
-              localStorage.removeItem("buzzerXRHighscore");
-            highscore = 0;
-            highscoreText.setAttribute("value", "Highscore: 0");
-          }
-
-          function updateHUD() {
-            screenText.setAttribute("visible", !gameRunning);
-            highscoreText.setAttribute("visible", !gameRunning);
-            reactionText.setAttribute("visible", !gameRunning);
-            startButton.setAttribute("visible", !gameRunning);
-            document
-              .getElementById("startLabel")
-              .setAttribute("visible", !gameRunning);
-            resetHighscoreButton.setAttribute("visible", !gameRunning);
-            document
-              .getElementById("resetLabel")
-              .setAttribute("visible", !gameRunning);
-            difficultyButton.setAttribute("visible", !gameRunning);
-            document
-              .getElementById("difficultyLabel")
-              .setAttribute("visible", !gameRunning);
-
-            timerText.setAttribute("visible", gameRunning);
-            scoreText.setAttribute("visible", gameRunning);
-
-            timerText.setAttribute("value", formatTime(timeLeft));
-            scoreText.setAttribute("value", "Score: " + Math.round(score));
-            highscoreText.setAttribute("value", "Highscore: " + highscore);
-
-            if (bestReaction == null) {
-              reactionText.setAttribute("value", "Reaktion: -- ms");
-            } else {
-              reactionText.setAttribute(
+            const stored = localStorage.getItem("buzzerXRHighscore");
+            if (stored) {
+              savedHighscore = parseInt(stored, 10) || 0;
+              highscoreDisplay.setAttribute(
                 "value",
-                "Reaktion: " + Math.round(bestReaction) + " ms",
+                "Highscore: " + savedHighscore,
               );
             }
           }
 
-          function removeCurrentBuzzer(missed = false) {
-            if (!currentBuzzer) return;
+          // zeit formatieren
+          function formatTime(seconds) {
+            return "Zeit: " + seconds.toFixed(1);
+          }
+
+          function setDifficulty(index) {
+            currentDifficulty = index;
+            difficultyLabel.setAttribute(
+              "value",
+              difficulties[currentDifficulty].name,
+            );
+          }
+
+          function changeDifficulty() {
+            if (isGameActive) return;
+            currentDifficulty = (currentDifficulty + 1) % difficulties.length;
+            setDifficulty(currentDifficulty);
+          }
+
+          function deleteHighscore() {
+            if (window.localStorage) {
+              localStorage.removeItem("buzzerXRHighscore");
+            }
+            savedHighscore = 0;
+            highscoreDisplay.setAttribute("value", "Highscore: 0");
+          }
+
+          // refresh funktion für Anzeige
+          function refreshUI() {
+            const gameInProgress = isGameActive;
+
+            // menü (nicht sichtbar wenn spiel läuft)
+            screenTextDisplay.setAttribute("visible", !gameInProgress);
+            highscoreDisplay.setAttribute("visible", !gameInProgress);
+            reactionDisplay.setAttribute("visible", !gameInProgress);
+            startBtn.setAttribute("visible", !gameInProgress);
+            document
+              .getElementById("startLabel")
+              .setAttribute("visible", !gameInProgress);
+            resetHighscoreBtn.setAttribute("visible", !gameInProgress);
+            document
+              .getElementById("resetLabel")
+              .setAttribute("visible", !gameInProgress);
+            difficultyBtn.setAttribute("visible", !gameInProgress);
+            difficultyLabel.setAttribute("visible", !gameInProgress);
+
+            // hud (sichtbar während spiel läuft)
+            timerDisplay.setAttribute("visible", gameInProgress);
+            scoreDisplay.setAttribute("visible", gameInProgress);
+
+            // texte aktualisieren
+            timerDisplay.setAttribute("value", formatTime(remainingTime));
+            scoreDisplay.setAttribute(
+              "value",
+              "Score: " + Math.round(playerScore),
+            );
+            highscoreDisplay.setAttribute(
+              "value",
+              "Highscore: " + savedHighscore,
+            );
+
+            if (bestReactionTime == null) {
+              reactionDisplay.setAttribute("value", "Reaktion: -- ms");
+            } else {
+              reactionDisplay.setAttribute(
+                "value",
+                "Reaktion: " + Math.round(bestReactionTime) + " ms",
+              );
+            }
+          }
+
+          // entfernt den aktuellen buzzer aus dem spiel
+          function removeBuzzer(missed = false) {
+            if (!activeBuzzer) return;
+
             if (buzzerTimeoutId) {
               clearTimeout(buzzerTimeoutId);
               buzzerTimeoutId = null;
             }
+
             if (missed) {
-              currentBuzzer.setAttribute("material", "color: #ff8800");
+              // Verfärbung wenn verpasst
+              activeBuzzer.setAttribute("material", "color: #ff8800");
               setTimeout(() => {
-                if (currentBuzzer && currentBuzzer.parentNode)
-                  currentBuzzer.parentNode.removeChild(currentBuzzer);
-                currentBuzzer = null;
+                if (activeBuzzer?.parentNode) {
+                  activeBuzzer.parentNode.removeChild(activeBuzzer);
+                }
+                activeBuzzer = null;
               }, 150);
             } else {
-              if (currentBuzzer.parentNode)
-                currentBuzzer.parentNode.removeChild(currentBuzzer);
-              currentBuzzer = null;
+              // Sofort entfernen wenn geklickt
+              if (activeBuzzer.parentNode) {
+                activeBuzzer.parentNode.removeChild(activeBuzzer);
+              }
+              activeBuzzer = null;
             }
           }
 
           function spawnBuzzer() {
-            if (!gameRunning || currentBuzzer) return;
+            if (!isGameActive || activeBuzzer) return;
 
-            const diff = difficulties[difficultyIndex];
-            const x = (Math.random() - 0.5) * 0.65;
-            const y = (Math.random() - 0.5) * 0.38;
-            const z = 0.01;
+            const difficulty = difficulties[currentDifficulty];
+            const randomX = (Math.random() - 0.5) * 0.65;
+            const randomY = (Math.random() - 0.5) * 0.38;
+            const depth = 0.01;
 
             const buzzer = document.createElement("a-entity");
             buzzer.setAttribute("class", "buzzer clickable");
             buzzer.setAttribute("scale", "0.6 0.6 0.6");
-            buzzer.setAttribute("position", x + " " + y + " " + z);
+            buzzer.setAttribute(
+              "position",
+              randomX + " " + randomY + " " + depth,
+            );
             buzzer.setAttribute("rotation", "90 0 0");
             buzzer.setAttribute(
               "geometry",
@@ -739,100 +824,125 @@
             );
             buzzer.setAttribute("material", "color: #ff0000; shader: flat");
 
+            // Click-Ereignis für korrekte Reaktion
             buzzer.addEventListener("click", () => {
-              if (!gameRunning || buzzer !== currentBuzzer) return;
-              const rt = performance.now() - buzzerSpawnTime;
-              score += Math.max(10, 1500 - rt);
-              bestReaction =
-                bestReaction == null ? rt : Math.min(bestReaction, rt);
+              if (!isGameActive || buzzer !== activeBuzzer) return;
+
+              // Berechne Reaktionszeit
+              const reactionTime = performance.now() - buzzerSpawnedAt;
+
+              // punkte: je schneller, desto mehr punkte (basis 10 + bonuspunkte)
+              playerScore += Math.max(10, 1500 - reactionTime);
+              bestReactionTime =
+                bestReactionTime == null
+                  ? reactionTime
+                  : Math.min(bestReactionTime, reactionTime);
+
+              // Feedback wenn getroffen
               buzzer.setAttribute("material", "color: #00ff00");
               buzzer.setAttribute(
                 "animation__hit",
                 "property: scale; from: 1 1 1; to: 1.4 1.4 1.4; dur: 180",
               );
-              setTimeout(() => removeCurrentBuzzer(false), 180);
-              updateHUD();
-              scheduleNextSpawn();
+
+              setTimeout(() => removeBuzzer(false), 180);
+              refreshUI();
+              scheduleNextBuzzer();
             });
 
-            buzzerContainer.appendChild(buzzer);
-            currentBuzzer = buzzer;
-            buzzerSpawnTime = performance.now();
+            screenUIContainer.appendChild(buzzer);
+            activeBuzzer = buzzer;
+            buzzerSpawnedAt = performance.now();
 
+            // entfernen wenn buzzer verpasst
             buzzerTimeoutId = setTimeout(() => {
-              if (!gameRunning || !currentBuzzer || currentBuzzer !== buzzer)
+              if (!isGameActive || !activeBuzzer || activeBuzzer !== buzzer)
                 return;
-              removeCurrentBuzzer(true);
-              scheduleNextSpawn();
-            }, diff.buzzerLifetime * 1000);
+              removeBuzzer(true);
+              scheduleNextBuzzer();
+            }, difficulty.buzzerLifetime * 1000);
           }
 
-          function scheduleNextSpawn() {
-            const diff = difficulties[difficultyIndex];
+          // plant den zeitpunkt für den nächsten buzzer
+          function scheduleNextBuzzer() {
+            const difficulty = difficulties[currentDifficulty];
             const delay =
-              diff.spawnDelayMin +
-              Math.random() * (diff.spawnDelayMax - diff.spawnDelayMin);
-            nextSpawnTime = performance.now() + delay * 1000;
+              difficulty.spawnDelayMin +
+              Math.random() *
+                (difficulty.spawnDelayMax - difficulty.spawnDelayMin);
+            nextBuzzerSpawnTime = performance.now() + delay * 1000;
           }
 
-          function startGame() {
-            if (gameRunning) return;
-            gameRunning = true;
-            timeLeft = GAME_DURATION;
-            score = 0;
-            bestReaction = null;
+          function startNewGame() {
+            if (isGameActive) return;
+
+            isGameActive = true;
+            remainingTime = GAME_DURATION;
+            playerScore = 0;
+            bestReactionTime = null;
 
             document.getElementById("audioStart").play();
-            updateHUD();
-            scheduleNextSpawn();
+            refreshUI();
+            scheduleNextBuzzer();
           }
 
-          function endGame() {
-            gameRunning = false;
-            removeCurrentBuzzer(false);
-            if (score > highscore) {
-              highscore = Math.round(score);
-              if (window.localStorage)
-                localStorage.setItem("buzzerXRHighscore", highscore);
+          function endCurrentGame() {
+            isGameActive = false;
+            removeBuzzer(false);
+
+            // neuer highscore
+            if (playerScore > savedHighscore) {
+              savedHighscore = Math.round(playerScore);
+              if (window.localStorage) {
+                localStorage.setItem("buzzerXRHighscore", savedHighscore);
+              }
             }
-            updateHUD();
-            screenText.setAttribute(
+
+            refreshUI();
+
+            // zeige endergebnis auf dem bildschirm
+            screenTextDisplay.setAttribute(
               "value",
               "GAME OVER\nScore: " +
-                Math.round(score) +
+                Math.round(playerScore) +
                 "\nBeste Reaktion: " +
-                (bestReaction == null
+                (bestReactionTime == null
                   ? "--"
-                  : Math.round(bestReaction) + " ms") +
+                  : Math.round(bestReactionTime) + " ms") +
                 "\nHighscore: " +
-                highscore +
+                savedHighscore +
                 "\nDruecke START fuer neue Runde",
             );
           }
 
-          function tick(dt) {
-            const now = performance.now();
-            if (gameRunning) {
-              timeLeft -= dt;
-              if (timeLeft <= 0) {
-                timeLeft = 0;
-                endGame();
-              }
-              updateHUD();
-              if (!currentBuzzer && now >= nextSpawnTime) spawnBuzzer();
+          // deltaTime in sekunden, Zeit seit letztem Frame
+          function gameLoop(deltaTime) {
+            if (!isGameActive) return;
+
+            remainingTime -= deltaTime;
+
+            if (remainingTime <= 0) {
+              remainingTime = 0;
+              endCurrentGame();
+              return;
+            }
+
+            refreshUI();
+
+            // Spawne neuen Buzzer wenn Zeit ist vorbei
+            if (!activeBuzzer && performance.now() >= nextBuzzerSpawnTime) {
+              spawnBuzzer();
             }
           }
 
-          window.__buzzerTick = tick;
+          // button events
+          window.__buzzerTick = gameLoop;
+          startBtn.addEventListener("click", () => startNewGame());
+          difficultyBtn.addEventListener("click", () => changeDifficulty());
+          resetHighscoreBtn.addEventListener("click", () => deleteHighscore());
 
-          startButton.addEventListener("click", () => startGame());
-          difficultyButton.addEventListener("click", () => cycleDifficulty());
-          resetHighscoreButton.addEventListener("click", () =>
-            resetHighscore(),
-          );
-
-          setDifficulty(difficultyIndex);
-          updateHUD();
+          setDifficulty(currentDifficulty);
+          refreshUI();
         })();
       </script>
     </a-scene>
