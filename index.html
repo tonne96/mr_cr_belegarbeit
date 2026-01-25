@@ -869,6 +869,13 @@
             isGameActive = false;
             removeBuzzer(false);
 
+            // Stoppe die Musik
+            const audio = document.getElementById("audioStart");
+            if (audio) {
+              audio.pause();
+              audio.currentTime = 0;
+            }
+
             // neuer highscore
             if (playerScore > savedHighscore) {
               savedHighscore = Math.round(playerScore);
