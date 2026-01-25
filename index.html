@@ -46,7 +46,7 @@
     <button id="vrButton" class="xr-button">🥽 VR starten</button>
     <button id="arButton" class="xr-button">📱 AR starten</button>
     <a-scene
-      xr-mode-ui="enabled: true"
+      xr-mode-ui="enabled: false"
       renderer="antialias: true; colorManagement: true"
       background="color: #ffffff"
     >
@@ -539,6 +539,10 @@
             left && left.setAttribute("visible", "false");
             right && right.setAttribute("visible", "false");
 
+            // ✅ Startposition speichern VOR dem Positionswechsel
+            xrStartRigPos = { ...rig.getAttribute("position") };
+            xrStartRigRot = { ...rig.getAttribute("rotation") };
+
             // ✅ AR-Modus: Hintergrund transparent machen
             scene.setAttribute("background", "color: rgba(0, 0, 0, 0)");
 
@@ -548,16 +552,15 @@
               "colorManagement: true; antialias: true;",
             );
 
-            // ✅ In AR-Modus: Position beibehalten aber Rotation reset
-            if (cam) {
-              cam.setAttribute("rotation", "0 0 0");
-            }
+            // ✅ NEU: Rig für AR positionieren (weiter weg, richtige Höhe)
+            requestAnimationFrame(() => {
+              rig.setAttribute("position", { x: 0, y: 1.8, z: 4 });
+              rig.setAttribute("rotation", { x: 0, y: 0, z: 0 });
 
-            // ✅ AR-Startposition speichern
-            setTimeout(() => {
-              xrStartRigPos = { ...rig.getAttribute("position") };
-              xrStartRigRot = { ...rig.getAttribute("rotation") };
-            }, 100);
+              if (cam) {
+                cam.setAttribute("rotation", "0 0 0");
+              }
+            });
           });
 
           scene.addEventListener("exit-ar", () => {
