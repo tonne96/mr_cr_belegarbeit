@@ -469,17 +469,15 @@
               scene.exitAR();
             } else {
               try {
-                const session = await navigator.xr.requestSession(
-                  "immersive-ar",
-                  {
-                    requiredFeatures: ["hit-test"],
-                    optionalFeatures: ["dom-overlay"],
-                    domOverlay: { root: document.body },
-                  },
-                );
+                // Minimal AR-Session ohne komplexe Parameter (wie im funktionierenden Beispiel)
+                const session =
+                  await navigator.xr.requestSession("immersive-ar");
                 scene.enterAR();
               } catch (e) {
                 console.error("AR Error:", e);
+                alert(
+                  "AR nicht verfügbar. Stelle sicher, dass Kamerazugriff erlaubt ist.",
+                );
               }
             }
           });
