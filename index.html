@@ -45,6 +45,7 @@
   <body>
     <button id="vrButton" class="xr-button">🥽 VR starten</button>
     <button id="arButton" class="xr-button">📱 AR starten</button>
+
     <a-scene
       xr-mode-ui="enabled: false"
       renderer="antialias: true; colorManagement: true"
@@ -52,10 +53,7 @@
     >
       <!-- Licht -->
       <a-entity light="type: ambient; intensity: 0.5"></a-entity>
-      <a-entity
-        light="type: directional; intensity: 0.8"
-        position="0 3 -2"
-      ></a-entity>
+      <a-entity light="type: directional; intensity: 0.8" position="0 3 -2"></a-entity>
 
       <a-assets>
         <a-asset-item id="automat" src="./assets/Automat.gltf"></a-asset-item>
@@ -69,6 +67,14 @@
         scale="1 1 1"
         position="-0.4 -1.35 -1"
         rotation="0 270 0"
+      ></a-entity>
+
+      <!-- (NEU) Spawnpunkt, den du neben/vor den Automaten setzen kannst -->
+      <a-entity
+        id="xrSpawn"
+        position="0.3 3 4"
+        rotation="0 0 0"
+        visible="false"
       ></a-entity>
 
       <a-entity id="arcade" position="0 0 -2">
@@ -193,12 +199,7 @@
       </a-entity>
 
       <!-- Sounds-->
-      <a-sound
-        id="sndStart"
-        src="#audioStart"
-        autoplay="false"
-        volume="0.7"
-      ></a-sound>
+      <a-sound id="sndStart" src="#audioStart" autoplay="false" volume="0.7"></a-sound>
 
       <!-- =========================
            PLAYER RIG (Desktop + VR)
@@ -417,6 +418,26 @@
           moveRigSoCameraHitsWorldPos(targetPos, targetYaw);
         }
 
+        function afterXRFrame(scene, cb) {
+          const xr = scene && scene.renderer && scene.renderer.xr;
+          const session = xr && xr.getSession && xr.getSession();
+          if (!session) return cb();
+          session.requestAnimationFrame(() => cb());
+        }
+
+        function spawnAtSpawnPoint() {
+          const spawn = document.getElementById("xrSpawn");
+          if (!spawn) return;
+
+          const p = new THREE.Vector3();
+          spawn.object3D.getWorldPosition(p);
+
+          const r = spawn.getAttribute("rotation");
+          const yaw = r ? r.y : 0;
+
+          moveRigSoCameraHitsWorldPos(p, yaw);
+        }
+
         // =========================================================
         // VR/AR Enter/Exit: Controller sichtbar + Spawn nach XR init
         // + Beim Exit zurück zum "vor dem Automaten" Punkt
@@ -450,17 +471,7 @@
             if (scene.is("vr-mode")) {
               scene.exitVR();
             } else {
-              try {
-                const session = await navigator.xr.requestSession(
-                  "immersive-vr",
-                  {
-                    requiredFeatures: ["local-floor"],
-                  },
-                );
-                scene.enterVR();
-              } catch (e) {
-                console.error("VR Error:", e);
-              }
+              scene.enterVR();
             }
           });
 
@@ -468,17 +479,7 @@
             if (scene.is("ar-mode")) {
               scene.exitAR();
             } else {
-              try {
-                // Minimal AR-Session ohne komplexe Parameter (wie im funktionierenden Beispiel)
-                const session =
-                  await navigator.xr.requestSession("immersive-ar");
-                scene.enterAR();
-              } catch (e) {
-                console.error("AR Error:", e);
-                alert(
-                  "AR nicht verfügbar. Stelle sicher, dass Kamerazugriff erlaubt ist.",
-                );
-              }
+              scene.enterAR();
             }
           });
 
@@ -497,17 +498,12 @@
             left && left.setAttribute("visible", "true");
             right && right.setAttribute("visible", "true");
 
-            requestAnimationFrame(() => {
-              requestAnimationFrame(() => {
-                // Spawn vor Automat
-                spawnInFrontOfAutomat();
-
-                // ✅ DIREKT DANACH speichern wir die Position/Rotation
-                setTimeout(() => {
-                  xrStartRigPos = { ...rig.getAttribute("position") };
-                  xrStartRigRot = { ...rig.getAttribute("rotation") };
-                }, 0);
-              });
+            afterXRFrame(scene, () => {
+              spawnAtSpawnPoint();
+              setTimeout(() => {
+                xrStartRigPos = { ...rig.getAttribute("position") };
+                xrStartRigRot = { ...rig.getAttribute("rotation") };
+              }, 0);
             });
           });
 
@@ -552,14 +548,8 @@
               "colorManagement: true; antialias: true;",
             );
 
-            // ✅ NEU: Rig für AR positionieren (weiter weg, richtige Höhe)
-            requestAnimationFrame(() => {
-              rig.setAttribute("position", { x: 0, y: 1.8, z: 4 });
-              rig.setAttribute("rotation", { x: 0, y: 0, z: 0 });
-
-              if (cam) {
-                cam.setAttribute("rotation", "0 0 0");
-              }
+            afterXRFrame(scene, () => {
+              spawnAtSpawnPoint();
             });
           });
 
