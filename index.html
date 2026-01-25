@@ -187,7 +187,7 @@
         </a-entity>
       </a-entity>
 
-      <!-- Musik-->
+      <!-- Musik https://www.youtube.com/watch?v=oTn-14AHiEU&list=PLPEwKpHq_H2CUb2hmglb7-dRS5X2tXmnV-->
       <a-sound
         id="sndStart"
         src="#audioStart"
@@ -486,7 +486,7 @@
               });
           }
 
-          // ============ VR Button Handling ============
+          // vr button handling
           vrBtn.addEventListener("click", async () => {
             if (scene.is("vr-mode")) {
               scene.exitVR();
@@ -507,7 +507,7 @@
             }
           });
 
-          // ============ AR Button Handling ============
+          // ar button handling
           arBtn.addEventListener("click", async () => {
             if (scene.is("ar-mode")) {
               scene.exitAR();
@@ -530,7 +530,6 @@
           // Aktiviere den Game Loop für alle Modi (Desktop, VR, AR)
           scene.setAttribute("buzzer-game-loop", "");
 
-          // ============ VR Start Event ============
           scene.addEventListener("enter-vr", () => {
             vrBtn.textContent = "🥽 VR beenden";
             arBtn.style.display = "none";
@@ -553,7 +552,7 @@
             });
           });
 
-          // ============ VR End Event ============
+          // vr end event
           scene.addEventListener("exit-vr", () => {
             vrBtn.textContent = "🥽 VR starten";
             arBtn.style.display = "block";
@@ -576,7 +575,7 @@
             cam?.setAttribute("rotation", "0 0 0");
           });
 
-          // ============ AR Start Event ============
+          // ar start event
           scene.addEventListener("enter-ar", () => {
             arBtn.textContent = "📱 AR beenden";
             vrBtn.style.display = "none";
@@ -595,28 +594,9 @@
               "renderer",
               "colorManagement: true; antialias: true;",
             );
-
-            // Platziere Automat für AR in guter Entfernung
-            // Warte 500ms bis A-Frame AR vollständig initialisiert ist
-            setTimeout(() => {
-              // spawnposition wenn AR startet
-              rig.setAttribute("position", { x: 0, y: 1.8, z: 3 });
-              rig.setAttribute("rotation", { x: 0, y: 0, z: 0 });
-              cam?.setAttribute("rotation", "0 0 0");
-
-              // Reduziere Skalierung in AR für realistischere Größe
-              const arcade = document.getElementById("arcade");
-              const screenContainer =
-                document.getElementById("screenContainer");
-              if (arcade && screenContainer) {
-                // AR-Größe: viel kleiner damit es in die reale Welt passt
-                arcade.setAttribute("scale", "0.0015 0.0015 0.0015");
-                screenContainer.setAttribute("scale", "0.0015 0.0015 0.0015");
-              }
-            }, 500);
           });
 
-          // ============ AR End Event ============
+          // ar end event
           scene.addEventListener("exit-ar", () => {
             arBtn.textContent = "📱 AR starten";
             vrBtn.style.display = "block";
