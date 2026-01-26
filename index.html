@@ -467,8 +467,11 @@
             vrBtn.style.display = "none";
             arBtn.style.display = "none";
 
-            avedRigPos = { ...rig.getAttribute("position") };
-            savedRigRot = { ...rig.getAttribute("rotation") };
+            savedRigPos = AFRAME.utils.clone(rig.getAttribute("position"));
+            savedRigRot = AFRAME.utils.clone(rig.getAttribute("rotation"));
+
+            /*avedRigPos = { ...rig.getAttribute("position") };
+            savedRigRot = { ...rig.getAttribute("rotation") };*/
           });
 
           // vr end event
@@ -483,7 +486,7 @@
 
             // Rückkehr zur Desktop-Position
             if (savedRigPos && savedRigRot) {
-              rig.setAttribute("position", savedRigPos );
+              rig.setAttribute("position", savedRigPos);
               rig.setAttribute("rotation", savedRigRot);
             }
 
