@@ -6,8 +6,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <!-- A-Frame -->
     <script src="https://aframe.io/releases/1.7.0/aframe.min.js"></script>
-    <!-- Optionale Hilfskomponenten -->
-    <script src="https://unpkg.com/aframe-event-set-component@5.0.0/dist/aframe-event-set-component.min.js"></script>
     <style>
       body {
         margin: 0;
@@ -43,8 +41,8 @@
   </head>
 
   <body>
-    <button id="vrButton" class="xr-button">🥽 VR starten</button>
-    <button id="arButton" class="xr-button">📱 AR starten</button>
+    <button id="vrButton" class="xr-button">VR starten</button>
+    <button id="arButton" class="xr-button">AR starten</button>
 
     <a-scene
       disable-xr-resize
@@ -69,7 +67,7 @@
         rotation="0 270 0"
       ></a-entity>
 
-      <!-- (NEU) Spawnpunkt, den du neben/vor den Automaten setzen kannst -->
+      <!-- Spawnpunkt wenn AR gestartet -->
       <a-entity
         id="xrSpawn"
         position="0.3 3 4"
@@ -196,11 +194,9 @@
       <!-- Musik https://www.youtube.com/watch?v=oTn-14AHiEU&list=PLPEwKpHq_H2CUb2hmglb7-dRS5X2tXmnV-->
       <a-sound id="sndStart" src="#audioStart" autoplay="false" volume="0.7"></a-sound>
 
-      <!-- =========================
-           PLAYER RIG (Desktop + VR)
-           ========================= -->
+      <!-- player rig -->
       <a-entity id="rig" position="0.3 3 4" rotation="0 0 0">
-        <!-- Desktop Kamera + WASD (Cursor-Ring entfernt) -->
+        <!-- Desktop Kamera + WASD (schwarzen ring entfernt) -->
         <a-entity
           id="camera"
           camera
@@ -211,7 +207,7 @@
           position="0 0 0"
         ></a-entity>
 
-        <!-- VR Controller (sichtbar nur in VR) -->
+        <!-- VR Controller (sichtbar nur in VR) -> hierfür haben wir ChatGPT verwendet -->
         <a-entity
           id="leftHand"
           visible="false"
@@ -234,46 +230,7 @@
       </a-entity>
 
       <script>
-        /**
-         * Verhindert Canvas-Resize während XR initialisiert
-         * Blockiert die A-Frame Resize-Funktion temporär um den Fehler zu vermeiden
-         */
-        AFRAME.registerComponent("disable-xr-resize", {
-          init: function () {
-            const scene = this.el;
-            let isXRLoading = false;
-
-            const originalResize = scene.resize.bind(scene);
-            scene.resize = function () {
-              if (isXRLoading) return; // Blockiere Resize während XR lädt
-              return originalResize();
-            };
-
-            // XR ist beim Start
-            scene.addEventListener("enter-vr", () => {
-              isXRLoading = true;
-            });
-            scene.addEventListener("enter-ar", () => {
-              isXRLoading = true;
-            });
-
-            // XR ist fertig oder beendet
-            setTimeout(() => {
-              scene.addEventListener("exit-vr", () => {
-                isXRLoading = false;
-              });
-              scene.addEventListener("exit-ar", () => {
-                isXRLoading = false;
-              });
-            }, 100);
-          },
-        });
-
-        /**
-         * Game Loop Komponente
-         * Diese Komponente wird jeden Frame aufgerufen und leitet die Zeit an
-         * die Game-Logik weiter. So wird sichergestellt, dass das Spiel in VR/AR läuft.
-         */
+        // Zeit wird übergeben und auf jedem Endgerät ist die Zeit gleich (deltatime) -> hierfür haben wir ChatGPT verwendet 
         AFRAME.registerComponent("buzzer-game-loop", {
           tick: function (time, timeDelta) {
             if (window.__buzzerTick) {
@@ -282,11 +239,7 @@
           },
         });
 
-        /**
-         * VR Controller Click Komponente
-         * Erkennt Controller-Button-Presses und wandelt sie in Click-Events um.
-         * Das ermöglicht es, interaktive Objekte mit VR-Controllern anzuklicken.
-         */
+        // VR Click Komponente -> hierfür haben wir ChatGPT verwendet
         AFRAME.registerComponent("vr-click", {
           init: function () {
             const fireClick = () => {
@@ -310,11 +263,7 @@
           },
         });
 
-        /**
-         * VR Bewegungs-Komponente (Joystick)
-         * Liest den linken Controller-Joystick aus und bewegt den Spieler
-         * in die Richtung, in die er schaut (relative Bewegung).
-         */
+        // VR Joystick Bewegungs Komponente -> hierfür haben wir ChatGPT verwendet
         AFRAME.registerComponent("vr-joystick-locomotion", {
           schema: {
             speed: { type: "number", default: 2.0 },
@@ -361,11 +310,7 @@
           },
         });
 
-        /**
-         * VR Höhen-Bewegungs-Komponente
-         * Der rechte Joystick bewegt den Spieler nach oben/unten.
-         * Dies ermöglicht eine freie Bewegung in 3D-Raum.
-         */
+        // VR Vertikale Bewegungs Komponente -> hierfür haben wir ChatGPT verwendet
         AFRAME.registerComponent("vr-vertical-move", {
           schema: {
             speed: { type: "number", default: 1.2 },
@@ -398,11 +343,7 @@
           },
         });
 
-        /**
-         * Hilfsfunktion: Bewegt den Rig so, dass die HMD-Kamera auf ein Ziel blickt
-         * Dies wird verwendet, um den Spieler beim Eintritt in VR vor den Automaten
-         * zu platzieren und gleichzeitig die Kamera auf den Automat auszurichten.
-         */
+        // Hilfsfunktion: Bewegt den Rig so, dass die HMD-Kamera auf ein Ziel blickt -> hierfür haben wir ChatGPT verwendet
         function moveRigSoCameraHitsWorldPos(targetWorldPos, targetYawDeg) {
           const rig = document.getElementById("rig");
           const cam = document.getElementById("camera");
@@ -423,14 +364,10 @@
             z: rigPos.z + delta.z,
           });
 
-          // Richte den Rig in die gewünschte Richtung
           rig.setAttribute("rotation", { x: 0, y: targetYawDeg, z: 0 });
         }
 
-        /**
-         * Platziert den Spieler vor dem Automaten mit Blickrichtung auf ihn
-         * Diese Funktion wird beim VR-Start aufgerufen, um einen guten Startpunkt zu schaffen.
-         */
+        // Positioniere den Spieler vor dem Automaten
         function spawnInFrontOfAutomat() {
           const automaton = document.getElementById("automatModel");
           if (!automaton) return;
@@ -439,30 +376,22 @@
           const automatonPos = new THREE.Vector3();
           automaton.object3D.getWorldPosition(automatonPos);
 
-          // Berechne die Blickrichtung des Automaten
+          // Berechne die Blickrichtung des Automaten (Quaternion definiert in Threejs die Rotation)
           const automatonForward = new THREE.Vector3(0, 0, -1).applyQuaternion(
             automaton.object3D.quaternion,
           );
 
-          // Positioniere den Spieler 1.2 Einheiten vor dem Automaten
           const spawnDistance = 1.2;
-          const spawnPos = automatonPos
-            .clone()
-            .add(automatonForward.clone().multiplyScalar(spawnDistance));
+          const spawnPos = automatonPos.clone().add(automatonForward.clone().multiplyScalar(spawnDistance));
 
-          // Der Spieler blickt auf den Automaten (180° Drehung)
           const automRot = automaton.getAttribute("rotation");
-          const lookAtYaw = (automRot ? automRot.y : 0) + 180;
+          const lookAtYaw = (automRot ? automRot.y : 0) + 180; // 180 dazu damit in gleiche Richtung von Automaten
 
           moveRigSoCameraHitsWorldPos(spawnPos, lookAtYaw);
         }
 
-
-		/**
-         * XR Setup - Verwaltet VR/AR Modus
-         * Hier werden die VR/AR-Buttons konfiguriert und die Modi werden gesteuert.
-         * Es wird zwischen VR-Mode und AR-Mode gewechselt und die Positionen werden entsprechend angepasst.
-         */        function afterXRFrame(scene, cb) {
+        // Initiale Positionierung vor dem Automaten -> hierfür haben wir ChatGPT verwendet
+         function afterXRFrame(scene, cb) {
           const xr = scene && scene.renderer && scene.renderer.xr;
           const session = xr && xr.getSession && xr.getSession();
           if (!session) return cb();
@@ -482,10 +411,7 @@
           moveRigSoCameraHitsWorldPos(p, yaw);
         }
 
-        // =========================================================
-        // VR/AR Enter/Exit: Controller sichtbar + Spawn nach XR init
-        // + Beim Exit zurück zum "vor dem Automaten" Punkt
-        // =========================================================
+        // Prüfe ob Gerät AR und VR unterstützt, wenn ja zeige die Buttons an
         (function setupXr() {
           const scene = document.querySelector("a-scene");
           const leftController = document.getElementById("leftHand");
@@ -497,7 +423,7 @@
 
           if (!scene || !rig) return;
 
-          // Prüfe, welche XR-Modi verfügbar sind und zeige Buttons nur wenn unterstützt
+          // Quelle aus Mixed Reality Übung 1 zu Aframe umgeschrieben und eigenen Buttons
           if (navigator.xr) {
             navigator.xr
               .isSessionSupported("immersive-vr")
@@ -511,7 +437,7 @@
               });
           }
 
-          // vr button handling
+          // vr button funktion
           vrBtn.addEventListener("click", async () => {
             if (scene.is("vr-mode")) {
               scene.exitVR();
@@ -520,7 +446,7 @@
             }
           });
 
-          // ar button handling
+          // ar button funktion
           arBtn.addEventListener("click", async () => {
             if (scene.is("ar-mode")) {
               scene.exitAR();
@@ -537,7 +463,7 @@
           scene.setAttribute("buzzer-game-loop", "");
 
           scene.addEventListener("enter-vr", () => {
-            vrBtn.textContent = "🥽 VR beenden";
+            vrBtn.textContent = "VR beenden";
             arBtn.style.display = "none";
 
             afterXRFrame(scene, () => {
@@ -551,7 +477,7 @@
 
           // vr end event
           scene.addEventListener("exit-vr", () => {
-            vrBtn.textContent = "🥽 VR starten";
+            vrBtn.textContent = "VR starten";
             arBtn.style.display = "block";
 
             // Verstecke Controller
@@ -574,7 +500,7 @@
 
           // ar start event
           scene.addEventListener("enter-ar", () => {
-            arBtn.textContent = "📱 AR beenden";
+            arBtn.textContent = "AR beenden";
             vrBtn.style.display = "none";
 
             // Verstecke Controller in AR (nicht nötig)
@@ -599,7 +525,7 @@
 
           // ar end event
           scene.addEventListener("exit-ar", () => {
-            arBtn.textContent = "📱 AR starten";
+            arBtn.textContent = "AR starten";
             vrBtn.style.display = "block";
 
             // Stelle normalen weißen Hintergrund wieder her
@@ -622,6 +548,11 @@
           });
         })();
 
+
+
+
+
+        
         // Spiellogik
         (function initGame() {
           const GAME_DURATION = 30;
@@ -818,7 +749,7 @@
                   ? reactionTime
                   : Math.min(bestReactionTime, reactionTime);
 
-              // Feedback wenn getroffen
+              // Feedback wenn getroffen -> hierfür haben wir ChatGPT verwendet
               buzzer.setAttribute("material", "color: #00ff00");
               buzzer.setAttribute(
                 "animation__hit",
