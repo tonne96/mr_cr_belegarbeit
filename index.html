@@ -46,7 +46,7 @@
 
     <a-scene
       disable-xr-resize
-      xr-mode-ui="enabled: true"
+      xr-mode-ui="enabled: false"
       renderer="antialias: true; colorManagement: true; alpha: true; transparent: true"
     >
       <!-- Licht -->
@@ -463,7 +463,7 @@
           scene.setAttribute("buzzer-game-loop", "");
 
           scene.addEventListener("enter-vr", () => {
-            vrBtn.textContent = "VR beenden";
+            vrBtn.style.display = "none";
             arBtn.style.display = "none";
 
             afterXRFrame(scene, () => {
@@ -479,6 +479,7 @@
           scene.addEventListener("exit-vr", () => {
             vrBtn.textContent = "VR starten";
             arBtn.style.display = "block";
+            vrBtn.style.display = "block";
 
             // Verstecke Controller
             leftController?.setAttribute("visible", "false");
@@ -490,7 +491,7 @@
               rig.setAttribute("rotation", savedRigRot);
             }
 
-            // Kameradrehung zurücksetzen
+            // Kameradrehung zurücksetzen -> hierfür haben wir ChatGPT verwendet
             const lookControls = cam?.components?.["look-controls"];
             if (lookControls?.resetOrientation) {
               lookControls.resetOrientation();
