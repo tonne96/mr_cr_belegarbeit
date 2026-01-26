@@ -458,6 +458,7 @@
           // Speichern der Desktop-Startposition für den Fall, dass VR/AR beendet wird
           let savedRigPos = null;
           let savedRigRot = null;
+          
 
           // Aktiviere den Game Loop für alle Modi (Desktop, VR, AR)
           scene.setAttribute("buzzer-game-loop", "");
@@ -466,13 +467,8 @@
             vrBtn.style.display = "none";
             arBtn.style.display = "none";
 
-            afterXRFrame(scene, () => {
-              spawnAtSpawnPoint();
-              setTimeout(() => {
-                xrStartRigPos = { ...rig.getAttribute("position") };
-                xrStartRigRot = { ...rig.getAttribute("rotation") };
-              }, 0);
-            });
+            avedRigPos = { ...rig.getAttribute("position") };
+            savedRigRot = { ...rig.getAttribute("rotation") };
           });
 
           // vr end event
@@ -487,7 +483,7 @@
 
             // Rückkehr zur Desktop-Position
             if (savedRigPos && savedRigRot) {
-              rig.setAttribute("position", savedRigPos);
+              rig.setAttribute("position", savedRigPos );
               rig.setAttribute("rotation", savedRigRot);
             }
 
