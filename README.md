@@ -10,7 +10,7 @@ Es handlet sich um eine Reaktionsspiel. Während des Spiel werden, je nach Schwi
 Der/Die Nutzer/in kann das Spiel entweder in VR oder in AR spielen. Dafür befinden sich in der Startszene zwei Buttons in der rechten oberen Ecke des Bildes.
 Wird die Anwendung im Browser gestartet, kann durch drücken der Escape-Taste der VR oder AR-Modus beendet werden.
 
-## Verwendete Bibliotheken/Sprachen/Programme
+## Verwendete Bibliotheken / Sprachen / Programme
 
 JavaScript
 A-Frame
