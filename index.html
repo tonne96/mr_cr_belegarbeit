@@ -207,7 +207,7 @@
           position="0 0 0"
         ></a-entity>
 
-        <!-- VR Controller (sichtbar nur in VR) -> hierfür haben wir ChatGPT verwendet -->
+        <!-- VR Controller (sichtbar nur in VR) -->
         <a-entity
           id="leftHand"
           visible="false"
@@ -230,7 +230,7 @@
       </a-entity>
 
       <script>
-        // Zeit wird übergeben und auf jedem Endgerät ist die Zeit gleich (deltatime) -> hierfür haben wir ChatGPT verwendet 
+        // Zeit wird übergeben und auf jedem Endgerät ist die Zeit gleich (deltatime)
         AFRAME.registerComponent("buzzer-game-loop", {
           tick: function (time, timeDelta) {
             if (window.__buzzerTick) {
@@ -390,7 +390,7 @@
           moveRigSoCameraHitsWorldPos(spawnPos, lookAtYaw);
         }
 
-        // Initiale Positionierung vor dem Automaten -> hierfür haben wir ChatGPT verwendet
+        // Initiale Positionierung vor dem Automaten
          function afterXRFrame(scene, cb) {
           const xr = scene && scene.renderer && scene.renderer.xr;
           const session = xr && xr.getSession && xr.getSession();
@@ -490,7 +490,7 @@
               rig.setAttribute("rotation", savedRigRot);
             }
 
-            // Kameradrehung zurücksetzen -> hierfür haben wir ChatGPT verwendet
+            // Kameradrehung zurücksetzen
             const lookControls = cam?.components?.["look-controls"];
             if (lookControls?.resetOrientation) {
               lookControls.resetOrientation();
